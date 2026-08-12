@@ -105,20 +105,30 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
 
   FPLLL_DEBUG_CHECK(param.strategies.size() > block_size);
 
-  int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
-  if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, 0))
+  if (param.flags & BKZ_DEEP_LLL)
   {
-    throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+    /* Algorithm 3 of Yamaguchi--Yasuda applies DeepLLL to the prefix
+       ending one row after the enumerated block. */
+    clean &= deep_lll(min(kappa + static_cast<int>(block_size) + 1, num_rows));
   }
-  if (lll_obj.n_swaps > 0)
-    clean = false;
+  else
+  {
+    int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
+    if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, 0))
+    {
+      throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+    }
+    if (lll_obj.n_swaps > 0)
+      clean = false;
+  }
 
   // run one tour of recursive preprocessing
   auto &preproc = param.strategies[block_size].preprocessing_block_sizes;
   for (auto it = preproc.begin(); it != preproc.end(); ++it)
   {
     int dummy_kappa_max = num_rows;
-    BKZParam prepar     = BKZParam(*it, param.strategies, LLL_DEF_DELTA, BKZ_GH_BND);
+    const int prepar_flags = BKZ_GH_BND | (param.flags & BKZ_DEEP_LLL);
+    BKZParam prepar         = BKZParam(*it, param.strategies, LLL_DEF_DELTA, prepar_flags);
     clean &= tour(0, dummy_kappa_max, prepar, kappa, kappa + block_size);
   }
 
@@ -343,7 +353,11 @@ bool BKZReduction<ZT, FT>::svp_reduction(int kappa, int block_size, const BKZPar
     remaining_probability *= (1 - pruning.expectation);
   }
 
-  if (!lll_obj.size_reduction(0, first + 1, 0))
+  if (par.flags & BKZ_DEEP_LLL)
+  {
+    deep_lll(min(kappa + block_size + 1, num_rows));
+  }
+  else if (!lll_obj.size_reduction(0, first + 1, 0))
   {
     throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
   }
@@ -355,6 +369,14 @@ bool BKZReduction<ZT, FT>::svp_reduction(int kappa, int block_size, const BKZPar
   FT new_first = m.get_r_exp(first, first, new_first_expo);
   new_first.mul_2si(new_first, new_first_expo - old_first_expo);
   return (dual) ? (old_first >= new_first) : (old_first <= new_first);
+}
+
+template <class ZT, class FT> bool BKZReduction<ZT, FT>::deep_lll(int kappa_end)
+{
+  kappa_end = min(kappa_end, num_rows);
+  if (!lll_obj.deeplll(kappa_end, 0, 0, kappa_end, 0))
+    throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+  return lll_obj.n_swaps == 0;
 }
 
 template <class ZT, class FT>
@@ -526,11 +548,20 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
   nodes            = 0;
   bool sd          = (flags & BKZ_SD_VARIANT);
   bool sld         = (flags & BKZ_SLD_RED);
-  algorithm        = sd ? "SD-BKZ" : sld ? "SLD" : "BKZ";
+  bool deep        = (flags & BKZ_DEEP_LLL);
+  algorithm        = sd ? "SD-BKZ" : sld ? "SLD" : deep ? "DeepBKZ" : "BKZ";
 
   if (sd && sld)
   {
     throw std::runtime_error("Invalid flags: SD-BKZ and Slide reduction are mutually exclusive!");
+  }
+  if (deep && (sd || sld))
+  {
+    throw std::runtime_error("DeepBKZ cannot be combined with SD-BKZ or slide reduction");
+  }
+  if (deep && (flags & BKZ_BOUNDED_LLL))
+  {
+    throw std::runtime_error("DeepBKZ requires full DeepLLL preprocessing");
   }
 
   if (flags & BKZ_DUMP_GSO)
@@ -828,6 +859,9 @@ int bkz_reduction_f(ZZ_mat<mpz_t> &b, const BKZParam &param, int sel_ft, double 
   {
     MatGSO<Z_NR<long>, FT> m_gso(bl, ul, ul_inv, gso_flags);
     LLLReduction<Z_NR<long>, FT> lll_obj(m_gso, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
+    if ((param.flags & BKZ_DEEP_LLL) && !(param.flags & BKZ_NO_LLL) &&
+        !lll_obj.deeplll(m_gso.d, 0, 0, m_gso.d, 0))
+      return lll_obj.status;
     BKZReduction<Z_NR<long>, FT> bkz_obj(m_gso, lll_obj, param);
     bkz_obj.bkz();
     convert<mpz_t, long>(b, bl, 0);
@@ -839,6 +873,9 @@ int bkz_reduction_f(ZZ_mat<mpz_t> &b, const BKZParam &param, int sel_ft, double 
   {
     MatGSO<Z_NR<mpz_t>, FT> m_gso(b, u, u_inv, gso_flags);
     LLLReduction<Z_NR<mpz_t>, FT> lll_obj(m_gso, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
+    if ((param.flags & BKZ_DEEP_LLL) && !(param.flags & BKZ_NO_LLL) &&
+        !lll_obj.deeplll(m_gso.d, 0, 0, m_gso.d, 0))
+      return lll_obj.status;
     BKZReduction<Z_NR<mpz_t>, FT> bkz_obj(m_gso, lll_obj, param);
     bkz_obj.bkz();
     return bkz_obj.status;
@@ -868,7 +905,7 @@ int bkz_reduction(ZZ_mat<mpz_t> *B, ZZ_mat<mpz_t> *U, const BKZParam &param, Flo
   /* lllwrapper (no FloatType needed, -m ignored) */
   if (param.flags & BKZ_NO_LLL)
     zeros_last(*B, u, u_inv);
-  else
+  else if (!(param.flags & BKZ_DEEP_LLL))
   {
     Wrapper wrapper(*B, u, u_inv, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
     if (!wrapper.lll())

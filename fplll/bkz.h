@@ -315,6 +315,8 @@ private:
   // a truncated dual tour: dual svp reducing from max_row to min_row without decreasing
   // the window size (simply returns when the first block is reduced)
   bool trunc_dtour(const BKZParam &param, int min_row, int max_row);
+  // Apply full DeepLLL to the prefix [0, kappa_end), as in DeepBKZ.
+  bool deep_lll(int kappa_end);
 
   const BKZParam &param;
   int num_rows;

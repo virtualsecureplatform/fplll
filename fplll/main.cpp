@@ -560,6 +560,11 @@ void read_options(int argc, char **argv, Options &o)
         o.action = ACTION_HKZ;
       else if (strcmp(argv[ac], "bkz") == 0)
         o.action = ACTION_BKZ;
+      else if (strcmp(argv[ac], "deepbkz") == 0)
+      {
+        o.action = ACTION_BKZ;
+        o.bkz_flags |= BKZ_DEEP_LLL;
+      }
       else if (strcmp(argv[ac], "svp") == 0)
         o.action = ACTION_SVP;
       else if (strcmp(argv[ac], "cvp") == 0)
@@ -774,10 +779,11 @@ void read_options(int argc, char **argv, Options &o)
       cout << "Usage: " << argv[0] << " [options] [file]\n"
 
            << "List of options:\n"
-           << "  -a [lll|deeplll|bkz|hkz|svp|sdb|sld|cvp]\n"
+           << "  -a [lll|deeplll|bkz|deepbkz|hkz|svp|sdb|sld|cvp]\n"
            << "       lll = LLL-reduce the input matrix (default)\n"
            << "       deeplll = DeepLLL-reduce the input matrix\n"
            << "       bkz = BKZ-reduce the input matrix\n"
+           << "       deepbkz = BKZ with DeepLLL preprocessing and postprocessing\n"
            << "       hkz = HKZ-reduce the input matrix\n"
            << "       svp = compute a shortest non-zero vector of the lattice\n"
            << "       sdb = reduce the input matrix using the self dual BKZ variant\n"

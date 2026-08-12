@@ -217,6 +217,7 @@ The options are:
 * `-a lll` : LLL-reduction (default).
 * `-a deeplll` : bounded DeepLLL reduction. It first runs LLL, then performs deep insertions using the first and last `depth` candidate positions, following BLASter's bounded variant. The default depth is 4.
 * `-a bkz` : BKZ-reduction.
+* `-a deepbkz` : DeepBKZ reduction. It uses full DeepLLL on the relevant prefix before and after each BKZ block operation, following Yamaguchi and Yasuda's DeepBKZ algorithm.
 * `-a hkz` : HKZ-reduction.
 * `-a svp` : prints a shortest non-zero vector of the lattice.
 * `-a sdb` : self dual variant of BKZ-reduction.

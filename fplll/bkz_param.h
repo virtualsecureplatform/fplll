@@ -91,6 +91,8 @@ public:
           - BKZ_GH_BND        use the Gaussian heuristic to reduce the enumeration bound of possible
           - BKZ_SD_VARIANT    run SD-BKZ
           - BKZ_SLD_RED       run slide reduction
+          - BKZ_DEEP_LLL      use full DeepLLL on the relevant prefix before and after each SVP
+                              block (incompatible with BKZ_BOUNDED_LLL, SD-BKZ, and slide reduction)
      @param max_loops
         maximum number of loops (or zero to disable this)
      @param max_time
