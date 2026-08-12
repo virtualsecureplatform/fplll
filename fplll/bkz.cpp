@@ -22,7 +22,9 @@
 #include "enum/enumerate.h"
 #include "util.h"
 #include "wrapper.h"
+#include <cmath>
 #include <iomanip>
+#include <limits>
 
 FPLLL_BEGIN_NAMESPACE
 
@@ -379,6 +381,189 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::deep_lll(int kappa_end)
   return lll_obj.n_swaps == 0;
 }
 
+template <class ZT, class FT> bool BKZReduction<ZT, FT>::pot_lll()
+{
+  if (!lll_obj.potlll(0, 0, num_rows, 0))
+    throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+  return lll_obj.n_swaps == 0;
+}
+
+template <class ZT, class FT>
+bool BKZReduction<ZT, FT>::pot_enum_search(int current, int endpoint,
+                                            const vector<vector<long double>> &mu,
+                                            const vector<long double> &rdiag,
+                                            vector<long> &solution,
+                                            vector<long double> &distances,
+                                            long double log_target)
+{
+  /* Equation (19) in the paper bounds the current projected norm D_current.
+     The terms are normalized by a common diagonal scale in pot_enum(), so this
+     calculation remains well-conditioned while preserving every comparison. */
+  long double log_higher = 0.0L;
+  for (int i = current + 1; i < endpoint; ++i)
+    log_higher += std::log(distances[i]);
+  const long double log_radius = (log_target - log_higher) / (current + 1);
+  const long double radius     = std::exp(log_radius);
+  const long double remaining  = radius - distances[current + 1];
+  if (!(remaining > 0.0L))
+    return false;
+
+  long double center = 0.0L;
+  for (int i = current + 1; i <= endpoint; ++i)
+    center += mu[i][current] * solution[i];
+  const long double deviation = std::sqrt(remaining / rdiag[current]);
+  const long double lower     = std::ceil(-center - deviation);
+  const long double upper     = std::floor(-center + deviation);
+  const long double max_long  = static_cast<long double>(numeric_limits<long>::max() / 2);
+  if (lower < -max_long || upper > max_long)
+    return false;
+
+  const long lower_long = static_cast<long>(lower);
+  const long upper_long = static_cast<long>(upper);
+  for (long coefficient = lower_long; coefficient <= upper_long; ++coefficient)
+  {
+    solution[current] = coefficient;
+    const long double residual = static_cast<long double>(coefficient) + center;
+    distances[current] = distances[current + 1] + residual * residual * rdiag[current];
+    nodes++;
+
+    if (current == 0)
+    {
+      long double log_potential = 0.0L;
+      for (int i = 0; i < endpoint; ++i)
+        log_potential += std::log(distances[i]);
+      if (log_potential < log_target)
+        return true;
+    }
+    else if (pot_enum_search(current - 1, endpoint, mu, rdiag, solution, distances, log_target))
+    {
+      return true;
+    }
+
+    if (coefficient == upper_long)
+      break;  // Avoid overflow on the increment at LONG_MAX.
+  }
+  return false;
+}
+
+template <class ZT, class FT>
+bool BKZReduction<ZT, FT>::pot_enum(int kappa, int block_size, vector<long> &solution)
+{
+  if (!m.update_gso())
+    throw std::runtime_error("PotENUM failed to update Gram-Schmidt data");
+
+  vector<long double> log_rdiag(block_size);
+  long double normalization = -numeric_limits<long double>::infinity();
+  for (int i = 0; i < block_size; ++i)
+  {
+    long exponent;
+    const FT &diagonal = m.get_r_exp(kappa + i, kappa + i, exponent);
+    if (!(diagonal > 0))
+      return false;
+    log_rdiag[i] = std::log(static_cast<long double>(diagonal.get_d())) +
+                   static_cast<long double>(exponent) * std::log(2.0L);
+    normalization = max(normalization, log_rdiag[i]);
+  }
+
+  vector<long double> rdiag(block_size);
+  vector<vector<long double>> mu(block_size, vector<long double>(block_size, 0.0L));
+  for (int i = 0; i < block_size; ++i)
+  {
+    rdiag[i] = std::exp(log_rdiag[i] - normalization);
+    if (!(rdiag[i] > 0.0L))
+      return false;
+    for (int j = 0; j < i; ++j)
+    {
+      FT coefficient;
+      m.get_mu(coefficient, kappa + i, kappa + j);
+      mu[i][j] = static_cast<long double>(coefficient.get_d());
+    }
+  }
+
+  const long double log_delta = std::log(static_cast<long double>(delta.get_d()));
+  for (int endpoint = 1; endpoint < block_size; ++endpoint)
+  {
+    long double log_target = log_delta;
+    for (int i = 0; i < endpoint; ++i)
+      log_target += std::log(rdiag[i]);
+
+    solution.assign(block_size, 0);
+    solution[endpoint] = 1;  // PotENUM fixes the largest nonzero coefficient to one.
+    vector<long double> distances(endpoint + 1, 0.0L);
+    distances[endpoint] = rdiag[endpoint];
+    if (pot_enum_search(endpoint - 1, endpoint, mu, rdiag, solution, distances, log_target))
+      return true;
+  }
+  return false;
+}
+
+template <class ZT, class FT>
+void BKZReduction<ZT, FT>::pot_insert(int kappa, int endpoint, const vector<long> &solution)
+{
+  /* Move b_m to the insertion position, then form
+       v = b_m + sum_i solution[i] b_i.
+     This is exactly the insertion/removal operation of equation (14). */
+  m.move_row(kappa + endpoint, kappa);
+  m.row_op_begin(kappa, kappa + 1);
+  for (int i = 0; i < endpoint; ++i)
+  {
+    if (solution[i] != 0)
+    {
+      FT coefficient;
+      coefficient = static_cast<double>(solution[i]);
+      m.row_addmul(kappa, kappa + i + 1, coefficient);
+    }
+  }
+  m.row_op_end(kappa, kappa + 1);
+}
+
+template <class ZT, class FT> bool BKZReduction<ZT, FT>::potbkz()
+{
+  FPLLL_CHECK(param.delta > 0.25 && param.delta < 1.0,
+              "PotBKZ requires a reduction parameter delta with 1/4 < delta < 1");
+  if (num_rows < 2 || param.block_size < 2)
+    return set_status(RED_SUCCESS);
+
+  pot_lll();
+  int zero_count = 0;
+  int kappa      = 0;
+  int tours      = 0;
+  while (zero_count < num_rows - 1)
+  {
+    if ((param.flags & BKZ_MAX_TIME) &&
+        (cputime() - cputime_start) * 0.001 >= param.max_time)
+      return set_status(RED_BKZ_TIME_LIMIT);
+
+    const int block_size = min(param.block_size, num_rows - kappa);
+    vector<long> solution;
+    if (pot_enum(kappa, block_size, solution))
+    {
+      int endpoint = block_size - 1;
+      while (endpoint > 0 && solution[endpoint] == 0)
+        endpoint--;
+      FPLLL_DEBUG_CHECK(endpoint > 0 && solution[endpoint] == 1);
+      pot_insert(kappa, endpoint, solution);
+      pot_lll();
+      zero_count = 0;
+    }
+    else
+    {
+      zero_count++;
+    }
+
+    kappa = (kappa + 1) % (num_rows - 1);
+    if (kappa == 0)
+    {
+      tours++;
+      if (param.flags & BKZ_VERBOSE)
+        print_tour(tours, 0, num_rows);
+      if ((param.flags & BKZ_MAX_LOOPS) && tours >= param.max_loops)
+        return set_status(RED_BKZ_LOOPS_LIMIT);
+    }
+  }
+  return set_status(RED_SUCCESS);
+}
+
 template <class ZT, class FT>
 bool BKZReduction<ZT, FT>::tour(const int loop, int &kappa_max, const BKZParam &par, int min_row,
                                 int max_row)
@@ -549,7 +734,8 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
   bool sd          = (flags & BKZ_SD_VARIANT);
   bool sld         = (flags & BKZ_SLD_RED);
   bool deep        = (flags & BKZ_DEEP_LLL);
-  algorithm        = sd ? "SD-BKZ" : sld ? "SLD" : deep ? "DeepBKZ" : "BKZ";
+  bool pot         = (flags & BKZ_POT_LLL);
+  algorithm        = sd ? "SD-BKZ" : sld ? "SLD" : deep ? "DeepBKZ" : pot ? "PotBKZ" : "BKZ";
 
   if (sd && sld)
   {
@@ -562,6 +748,12 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
   if (deep && (flags & BKZ_BOUNDED_LLL))
   {
     throw std::runtime_error("DeepBKZ requires full DeepLLL preprocessing");
+  }
+  if (pot && (sd || sld || deep || (flags & BKZ_BOUNDED_LLL) || (flags & BKZ_NO_LLL)))
+  {
+    throw std::runtime_error(
+        "PotBKZ requires PotLLL and cannot be combined with DeepBKZ, SD-BKZ, slide reduction, "
+        "bounded LLL, or no LLL");
   }
 
   if (flags & BKZ_DUMP_GSO)
@@ -594,6 +786,21 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
   cputime_start = ((flags & BKZ_DUMP_GSO) || (flags & BKZ_MAX_TIME)) ? cputime() : 0;
 
   m.discover_all_rows();
+
+  if (pot)
+  {
+    try
+    {
+      const bool result = potbkz();
+      if (flags & BKZ_DUMP_GSO)
+        dump_gso(param.dump_gso_filename, true, "Output", -1, (cputime() - cputime_start) * 0.001);
+      return result;
+    }
+    catch (RedStatus &e)
+    {
+      return set_status(e);
+    }
+  }
 
   if (sld)
   {
@@ -905,7 +1112,7 @@ int bkz_reduction(ZZ_mat<mpz_t> *B, ZZ_mat<mpz_t> *U, const BKZParam &param, Flo
   /* lllwrapper (no FloatType needed, -m ignored) */
   if (param.flags & BKZ_NO_LLL)
     zeros_last(*B, u, u_inv);
-  else if (!(param.flags & BKZ_DEEP_LLL))
+  else if (!(param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL)))
   {
     Wrapper wrapper(*B, u, u_inv, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
     if (!wrapper.lll())

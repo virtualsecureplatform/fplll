@@ -93,6 +93,9 @@ public:
           - BKZ_SLD_RED       run slide reduction
           - BKZ_DEEP_LLL      use full DeepLLL on the relevant prefix before and after each SVP
                               block (incompatible with BKZ_BOUNDED_LLL, SD-BKZ, and slide reduction)
+          - BKZ_POT_LLL       run PotBKZ: PotLLL followed by potential-decreasing PotENUM insertions
+                              (incompatible with BKZ_BOUNDED_LLL, BKZ_NO_LLL, DeepBKZ, SD-BKZ,
+                              and slide reduction)
      @param max_loops
         maximum number of loops (or zero to disable this)
      @param max_time

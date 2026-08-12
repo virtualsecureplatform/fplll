@@ -219,6 +219,7 @@ The options are:
 * `-a potlll` : PotLLL reduction. It selects the deep insertion that minimises the potential quotient and makes it only when the quotient is below δ, following Fontein, Schneider and Wagner.
 * `-a bkz` : BKZ-reduction.
 * `-a deepbkz` : DeepBKZ reduction. It uses full DeepLLL on the relevant prefix before and after each BKZ block operation, following Yamaguchi and Yasuda's DeepBKZ algorithm.
+* `-a potbkz` : PotBKZ reduction. It runs PotLLL and searches each projected block for a vector whose insertion decreases the basis potential by at least δ, following Sato and Yasuda.
 * `-a hkz` : HKZ-reduction.
 * `-a svp` : prints a shortest non-zero vector of the lattice.
 * `-a sdb` : self dual variant of BKZ-reduction.

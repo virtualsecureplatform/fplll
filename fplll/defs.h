@@ -273,7 +273,8 @@ enum BKZFlags
   BKZ_GH_BND      = 0x80,
   BKZ_SD_VARIANT  = 0x100,
   BKZ_SLD_RED     = 0x200,
-  BKZ_DEEP_LLL    = 0x400
+  BKZ_DEEP_LLL    = 0x400,
+  BKZ_POT_LLL     = 0x800
 };
 
 enum HKZFlags

@@ -218,8 +218,22 @@ bool LLLReduction<ZT, FT>::deeplll(int depth, int kappa_min, int kappa_start, in
         if (projected_norm < insertion_threshold)
         {
           m.move_row(kappa, i);
+          /* move_row invalidates every affected GSO row.  BLASter performs
+             the equivalent insertion as Givens-updated adjacent swaps, so
+             its QR factor remains current.  Refresh here before the next
+             Babai call rather than using a partially invalidated prefix. */
+          if (!m.update_gso())
+          {
+            final_kappa = i;
+            return set_status(RED_GSO_FAILURE);
+          }
           n_swaps++;
-          kappa    = max(i - 1, kappa_min + 1);
+          /* BLASter resumes at the insertion point (except that row zero
+             cannot be the current LLL index).  The moved rows have to be
+             refreshed, but backing up one additional row can repeatedly
+             revisit an already reduced prefix and destabilise Babai on
+             high-dimensional HNF challenge bases. */
+          kappa    = max(i, kappa_min + 1);
           inserted = true;
           break;
         }
