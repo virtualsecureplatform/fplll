@@ -43,7 +43,7 @@ AM_CPPFLAGS = -I$(TOPSRCDIR) -I$(TOPSRCDIR)/fplll -I$(TOPBUILDDIR) -DTESTDATADIR
 STAGEDIR := $(realpath -s $(TOPBUILDDIR)/.libs)
 AM_LDFLAGS = -L$(STAGEDIR) -Wl,-rpath,$(STAGEDIR) -lfplll -no-install $(LIBQD_LIBS)
 
-TESTS = test_nr test_lll test_deeplll test_potlll test_deepbkz test_potbkz test_enum test_cvp test_svp test_bkz test_pruner test_gso test_lll_gram test_hlll test_svp_gram test_bkz_gram test_counter test_babai test_ceil
+TESTS = test_nr test_lll test_deeplll test_potlll test_deepbkz test_potbkz test_potlllbkz test_enum test_cvp test_svp test_bkz test_pruner test_gso test_lll_gram test_hlll test_svp_gram test_bkz_gram test_counter test_babai test_ceil
 
 test_pruner_LDADD=$(LIBQD_LIBS)
 
@@ -53,6 +53,7 @@ test_deeplll_SOURCES = test_deeplll.cpp
 test_potlll_SOURCES = test_potlll.cpp
 test_deepbkz_SOURCES = test_deepbkz.cpp
 test_potbkz_SOURCES = test_potbkz.cpp
+test_potlllbkz_SOURCES = test_potlllbkz.cpp
 test_enum_SOURCES = test_enum.cpp
 test_svp_SOURCES = test_svp.cpp
 test_cvp_SOURCES = test_cvp.cpp

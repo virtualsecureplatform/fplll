@@ -113,6 +113,14 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
        ending one row after the enumerated block. */
     clean &= deep_lll(min(kappa + static_cast<int>(block_size) + 1, num_rows));
   }
+  else if (param.flags & BKZ_POT_LLL_BKZ)
+  {
+    const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
+    if (!lll_obj.potlll(lll_start, lll_start, kappa + block_size, lll_start))
+      throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+    if (lll_obj.n_swaps > 0)
+      clean = false;
+  }
   else
   {
     int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
@@ -129,7 +137,8 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
   for (auto it = preproc.begin(); it != preproc.end(); ++it)
   {
     int dummy_kappa_max = num_rows;
-    const int prepar_flags = BKZ_GH_BND | (param.flags & BKZ_DEEP_LLL);
+    const int prepar_flags =
+        BKZ_GH_BND | (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ));
     BKZParam prepar         = BKZParam(*it, param.strategies, LLL_DEF_DELTA, prepar_flags);
     clean &= tour(0, dummy_kappa_max, prepar, kappa, kappa + block_size);
   }
@@ -307,6 +316,7 @@ bool BKZReduction<ZT, FT>::svp_reduction(int kappa, int block_size, const BKZPar
   old_first = FT(m.get_r_exp(first, first, old_first_expo));
 
   bool rerandomize             = false;
+  bool inserted                 = false;
   double remaining_probability = 1.0;
 
   while (remaining_probability > 1. - par.min_success_probability)
@@ -346,6 +356,7 @@ bool BKZReduction<ZT, FT>::svp_reduction(int kappa, int block_size, const BKZPar
     if (!evaluator.empty())
     {
       svp_postprocessing(kappa, block_size, evaluator.begin()->second, dual);
+      inserted = true;
       rerandomize = false;
     }
     else
@@ -358,6 +369,10 @@ bool BKZReduction<ZT, FT>::svp_reduction(int kappa, int block_size, const BKZPar
   if (par.flags & BKZ_DEEP_LLL)
   {
     deep_lll(min(kappa + block_size + 1, num_rows));
+  }
+  else if ((par.flags & BKZ_POT_LLL_BKZ) && inserted)
+  {
+    pot_lll();
   }
   else if (!lll_obj.size_reduction(0, first + 1, 0))
   {
@@ -381,9 +396,11 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::deep_lll(int kappa_end)
   return lll_obj.n_swaps == 0;
 }
 
-template <class ZT, class FT> bool BKZReduction<ZT, FT>::pot_lll()
+template <class ZT, class FT>
+bool BKZReduction<ZT, FT>::pot_lll(int kappa_min, int kappa_start, int kappa_end,
+                                   int size_reduction_start)
 {
-  if (!lll_obj.potlll(0, 0, num_rows, 0))
+  if (!lll_obj.potlll(kappa_min, kappa_start, kappa_end, size_reduction_start))
     throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
   return lll_obj.n_swaps == 0;
 }
@@ -735,7 +752,9 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
   bool sld         = (flags & BKZ_SLD_RED);
   bool deep        = (flags & BKZ_DEEP_LLL);
   bool pot         = (flags & BKZ_POT_LLL);
-  algorithm        = sd ? "SD-BKZ" : sld ? "SLD" : deep ? "DeepBKZ" : pot ? "PotBKZ" : "BKZ";
+  bool pot_lll_bkz = (flags & BKZ_POT_LLL_BKZ);
+  algorithm = sd ? "SD-BKZ" : sld ? "SLD" : deep ? "DeepBKZ" : pot ? "PotBKZ"
+                                                       : pot_lll_bkz ? "PotLLLBKZ" : "BKZ";
 
   if (sd && sld)
   {
@@ -754,6 +773,11 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
     throw std::runtime_error(
         "PotBKZ requires PotLLL and cannot be combined with DeepBKZ, SD-BKZ, slide reduction, "
         "bounded LLL, or no LLL");
+  }
+  if (pot_lll_bkz && (sd || sld || deep || pot))
+  {
+    throw std::runtime_error(
+        "PotLLLBKZ cannot be combined with PotBKZ, DeepBKZ, SD-BKZ, or slide reduction");
   }
 
   if (flags & BKZ_DUMP_GSO)
@@ -1066,9 +1090,14 @@ int bkz_reduction_f(ZZ_mat<mpz_t> &b, const BKZParam &param, int sel_ft, double 
   {
     MatGSO<Z_NR<long>, FT> m_gso(bl, ul, ul_inv, gso_flags);
     LLLReduction<Z_NR<long>, FT> lll_obj(m_gso, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
-    if ((param.flags & BKZ_DEEP_LLL) && !(param.flags & BKZ_NO_LLL) &&
-        !lll_obj.deeplll(m_gso.d, 0, 0, m_gso.d, 0))
-      return lll_obj.status;
+    if (!(param.flags & BKZ_NO_LLL) && (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ)))
+    {
+      const bool reduced = (param.flags & BKZ_DEEP_LLL)
+                               ? lll_obj.deeplll(m_gso.d, 0, 0, m_gso.d, 0)
+                               : lll_obj.potlll(0, 0, m_gso.d, 0);
+      if (!reduced)
+        return lll_obj.status;
+    }
     BKZReduction<Z_NR<long>, FT> bkz_obj(m_gso, lll_obj, param);
     bkz_obj.bkz();
     convert<mpz_t, long>(b, bl, 0);
@@ -1080,9 +1109,14 @@ int bkz_reduction_f(ZZ_mat<mpz_t> &b, const BKZParam &param, int sel_ft, double 
   {
     MatGSO<Z_NR<mpz_t>, FT> m_gso(b, u, u_inv, gso_flags);
     LLLReduction<Z_NR<mpz_t>, FT> lll_obj(m_gso, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
-    if ((param.flags & BKZ_DEEP_LLL) && !(param.flags & BKZ_NO_LLL) &&
-        !lll_obj.deeplll(m_gso.d, 0, 0, m_gso.d, 0))
-      return lll_obj.status;
+    if (!(param.flags & BKZ_NO_LLL) && (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ)))
+    {
+      const bool reduced = (param.flags & BKZ_DEEP_LLL)
+                               ? lll_obj.deeplll(m_gso.d, 0, 0, m_gso.d, 0)
+                               : lll_obj.potlll(0, 0, m_gso.d, 0);
+      if (!reduced)
+        return lll_obj.status;
+    }
     BKZReduction<Z_NR<mpz_t>, FT> bkz_obj(m_gso, lll_obj, param);
     bkz_obj.bkz();
     return bkz_obj.status;
@@ -1112,7 +1146,7 @@ int bkz_reduction(ZZ_mat<mpz_t> *B, ZZ_mat<mpz_t> *U, const BKZParam &param, Flo
   /* lllwrapper (no FloatType needed, -m ignored) */
   if (param.flags & BKZ_NO_LLL)
     zeros_last(*B, u, u_inv);
-  else if (!(param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL)))
+  else if (!(param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL | BKZ_POT_LLL_BKZ)))
   {
     Wrapper wrapper(*B, u, u_inv, lll_delta, LLL_DEF_ETA, LLL_DEFAULT);
     if (!wrapper.lll())

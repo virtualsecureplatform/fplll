@@ -317,8 +317,9 @@ private:
   bool trunc_dtour(const BKZParam &param, int min_row, int max_row);
   // Apply full DeepLLL to the prefix [0, kappa_end), as in DeepBKZ.
   bool deep_lll(int kappa_end);
-  // Apply PotLLL to the full basis, as required by PotBKZ.
-  bool pot_lll();
+  // Apply PotLLL to a prefix of the basis.
+  bool pot_lll(int kappa_min = 0, int kappa_start = 0, int kappa_end = -1,
+               int size_reduction_start = 0);
   // Search a projected block for a vector whose insertion decreases the
   // potential by delta (PotENUM in Sato's PotBKZ algorithm).
   bool pot_enum(int kappa, int block_size, vector<long> &solution);

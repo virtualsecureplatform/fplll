@@ -96,6 +96,9 @@ public:
           - BKZ_POT_LLL       run PotBKZ: PotLLL followed by potential-decreasing PotENUM insertions
                               (incompatible with BKZ_BOUNDED_LLL, BKZ_NO_LLL, DeepBKZ, SD-BKZ,
                               and slide reduction)
+          - BKZ_POT_LLL_BKZ   run standard BKZ with PotLLL in place of its LLL preprocessing and
+                              after successful SVP insertions (incompatible with PotBKZ, DeepBKZ,
+                              SD-BKZ, and slide reduction)
      @param max_loops
         maximum number of loops (or zero to disable this)
      @param max_time
