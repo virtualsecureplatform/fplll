@@ -142,6 +142,7 @@ const int PREC_QD        = 212;
 
 const double LLL_DEF_DELTA        = 0.99;
 const double LLL_DEF_ETA          = 0.51;
+const int DEEPLLL_DEF_DEPTH       = 4;
 const double LLL_DEF_EPSILON      = 0.01;
 const int SIZE_RED_FAILURE_THRESH = 5;
 

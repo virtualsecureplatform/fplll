@@ -92,6 +92,75 @@ template <class ZT> int lll(Options &o, ZZ_mat<ZT> &b)
   return status;
 }
 
+template <class ZT> int deeplll(Options &o, ZZ_mat<ZT> &b)
+{
+  ZZ_mat<ZT> u(1, 1), u_inv(1, 1);
+  const char *format = o.output_format ? o.output_format : "b";
+  int flags = 0;
+  if (o.verbose)
+    flags |= LLL_VERBOSE;
+  if (o.early_red)
+    flags |= LLL_EARLY_RED;
+  FPLLL_CHECK(!o.siegel, "Siegel's condition is not supported by DeepLLL");
+
+  /* The ordinary LLL CLI defaults to its adaptive wrapper.  DeepLLL has no
+     wrapper counterpart, so retain a useful default for `-a deeplll`. */
+  const LLLMethod method = (o.method == LM_WRAPPER) ? LM_HEURISTIC : o.method;
+  int status;
+  if (strchr(format, 'v') != NULL)
+    status = deeplll_reduction(b, u, u_inv, o.deeplll_depth, o.delta, o.eta, method, o.float_type,
+                               o.precision, flags);
+  else if (strchr(format, 'u') != NULL)
+    status = deeplll_reduction(b, u, o.deeplll_depth, o.delta, o.eta, method, o.float_type,
+                               o.precision, flags);
+  else
+    status = deeplll_reduction(b, o.deeplll_depth, o.delta, o.eta, method, o.float_type,
+                               o.precision, flags);
+
+  for (int i = 0; format[i]; i++)
+  {
+    switch (format[i])
+    {
+    case 'b':
+      if (format[i + 1] == 'k')
+      {
+        b.print_comma(cout);
+        i++;
+      }
+      else
+        cout << b << endl;
+      break;
+    case 'u':
+      if (format[i + 1] == 'k')
+      {
+        u.print_comma(cout);
+        i++;
+      }
+      else
+        cout << u << endl;
+      break;
+    case 'v':
+      if (format[i + 1] == 'k')
+      {
+        u_inv.print_comma(cout);
+        i++;
+      }
+      else
+        cout << u_inv << endl;
+      break;
+    case 't':
+      cout << status << endl;
+      break;
+    case ' ':
+      cout << endl;
+      break;
+    }
+  }
+  if (status != RED_SUCCESS)
+    cerr << "Failure: " << get_red_status_str(status) << endl;
+  return status;
+}
+
 /* BKZ reduction */
 
 void read_pruning_vector(const char *file_name, PruningParams &pr, int n)
@@ -462,6 +531,9 @@ template <class ZT> int run_action(Options &o)
   case ACTION_HLLL:
     result = hlll(o, m);
     break;
+  case ACTION_DEEPLLL:
+    result = deeplll(o, m);
+    break;
   case ACTION_PRU:
     result = prune(o, m);
     break;
@@ -504,10 +576,12 @@ void read_options(int argc, char **argv, Options &o)
       }
       else if (strcmp(argv[ac], "hlll") == 0)
         o.action = ACTION_HLLL;
+      else if (strcmp(argv[ac], "deeplll") == 0)
+        o.action = ACTION_DEEPLLL;
       else if (strcmp(argv[ac], "pru") == 0)
         o.action = ACTION_PRU;
       else
-        ABORT_MSG("parse error in -a switch: lll or svp expected");
+        ABORT_MSG("parse error in -a switch: valid action expected");
     }
     else if (strcmp(argv[ac], "-b") == 0)
     {
@@ -586,6 +660,13 @@ void read_options(int argc, char **argv, Options &o)
       ++ac;
       CHECK(ac < argc, "missing value after -d switch");
       o.delta = atof(argv[ac]);
+    }
+    else if (strcmp(argv[ac], "-deep") == 0 || strcmp(argv[ac], "-depth") == 0)
+    {
+      ++ac;
+      CHECK(ac < argc, "missing value after -depth switch");
+      o.deeplll_depth = atoi(argv[ac]);
+      CHECK(o.deeplll_depth >= 0, "DeepLLL depth must be non-negative");
     }
     else if (strcmp(argv[ac], "-e") == 0 || strcmp(argv[ac], "-eta") == 0)
     {
@@ -693,8 +774,9 @@ void read_options(int argc, char **argv, Options &o)
       cout << "Usage: " << argv[0] << " [options] [file]\n"
 
            << "List of options:\n"
-           << "  -a [lll|bkz|hkz|svp|sdb|sld|cvp]\n"
+           << "  -a [lll|deeplll|bkz|hkz|svp|sdb|sld|cvp]\n"
            << "       lll = LLL-reduce the input matrix (default)\n"
+           << "       deeplll = DeepLLL-reduce the input matrix\n"
            << "       bkz = BKZ-reduce the input matrix\n"
            << "       hkz = HKZ-reduce the input matrix\n"
            << "       svp = compute a shortest non-zero vector of the lattice\n"
@@ -712,6 +794,8 @@ void read_options(int argc, char **argv, Options &o)
            << "       Was the number of rows (ignored)\n"
 
            << "  -d <delta> (default=0.99; alias to -delta <delta>)\n"
+           << "  -depth <depth> (default=4; alias to -deep <depth>)\n"
+           << "       Bounded DeepLLL insertion parameter\n"
            << "  -e <eta> (default=0.51; alias to -eta <eta>)\n"
            << "  -t <theta> (default=0.001; alias to -theta <theta>)\n"
            << "  -l <lovasz>\n"

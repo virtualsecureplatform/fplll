@@ -53,6 +53,22 @@ public:
            int size_reduction_start = 0);
 
   /**
+     @brief DeepLLL reduction with bounded deep insertions.
+
+     The reduction starts with an ordinary LLL pass, then considers inserting
+     the current vector at an earlier position whenever its projected norm is
+     at most ``delta`` times the corresponding Gram--Schmidt norm.  ``depth``
+     limits candidate positions as in BLASter: the first ``depth`` positions
+     and the ``depth`` positions immediately preceding the current vector are
+     considered.  A depth of zero therefore performs only the initial LLL
+     pass.
+
+     @return success or failure (due to numerical instability)
+  */
+  bool deeplll(int depth, int kappa_min = 0, int kappa_start = 0, int kappa_end = -1,
+               int size_reduction_start = 0);
+
+  /**
      @brief Size reduction.
 
      Perform size reduction for all vectors between `kappa_start` and `kappa_end`.

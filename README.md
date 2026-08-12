@@ -215,6 +215,7 @@ vectors) given in stdin or in a file as parameter.
 The options are:
 
 * `-a lll` : LLL-reduction (default).
+* `-a deeplll` : bounded DeepLLL reduction. It first runs LLL, then performs deep insertions using the first and last `depth` candidate positions, following BLASter's bounded variant. The default depth is 4.
 * `-a bkz` : BKZ-reduction.
 * `-a hkz` : HKZ-reduction.
 * `-a svp` : prints a shortest non-zero vector of the lattice.
@@ -231,6 +232,7 @@ Options for LLL-reduction:
 
 * `-d delta` :     δ (default=0.99)
 * `-e eta` :       η (default=0.51). See [[NS09](#NS09)] for the definition of (δ,η)-LLL-reduced bases. 
+* `-depth depth` (or `-deep depth`) : DeepLLL insertion depth (default=4).
 * `-l lovasz` :    if !=0 Lovasz's condition. Otherwise, Siegel's condition (default: Lovasz). See [[A02](#A02)] for the definition of Siegel condition.
 
 * `-f mpfr` : sets the floating-point type to MPFR (default if `m=proved`).
@@ -455,4 +457,3 @@ Bug reports may be sent to [https://groups.google.com/forum/#!forum/fplll-devel]
 <a name="S09">[S09]</a> D. Stehle. Floating-Point LLL: Theoretical and Practical Aspects. The LLL Algorithm 2009: 179-213
 
 <a name="SE94">[SE94]</a>: C.-P. Schnorr and M. Euchner. Lattice basis reduction: Improved practical algorithms and solving subset sum problems. Math. Program. 66: 181-199 (1994)
-

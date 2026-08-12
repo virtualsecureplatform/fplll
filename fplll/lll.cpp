@@ -164,6 +164,85 @@ bool LLLReduction<ZT, FT>::lll(int kappa_min, int kappa_start, int kappa_end,
 }
 
 template <class ZT, class FT>
+bool LLLReduction<ZT, FT>::deeplll(int depth, int kappa_min, int kappa_start, int kappa_end,
+                                   int size_reduction_start)
+{
+  FPLLL_CHECK(depth >= 0, "DeepLLL depth must be non-negative");
+  FPLLL_CHECK(!siegel, "Siegel's condition is not supported by DeepLLL");
+  if (kappa_end == -1)
+    kappa_end = m.d;
+
+  FPLLL_DEBUG_CHECK(kappa_min <= kappa_start && kappa_start < kappa_end && kappa_end <= m.d);
+
+  /* An LLL pre-pass greatly reduces the number of deep-insertion tests and
+     is also the strategy used by BLASter's implementation. */
+  if (!lll(kappa_min, kappa_start, kappa_end, size_reduction_start))
+    return false;
+
+  const int effective_end = kappa_end - zeros;
+  int kappa               = kappa_start + 1;
+  int start_time          = verbose ? cputime() : 0;
+
+  FT projected_norm;
+  FT contribution;
+  FT insertion_threshold;
+
+  if (verbose)
+    cerr << "Entering DeepLLL with depth=" << depth << endl;
+
+  while (kappa < effective_end)
+  {
+    /* Keep the current vector size-reduced before evaluating its projections.
+       babai() also refreshes the necessary GSO coefficients. */
+    if (!babai(kappa, kappa, size_reduction_start))
+    {
+      final_kappa = kappa;
+      return false;
+    }
+
+    m.get_gram(projected_norm, kappa, kappa);
+    bool inserted = false;
+    for (int i = kappa_min; i < kappa; i++)
+    {
+      /* This is the bounded candidate set used by BLASter. */
+      const bool in_depth_window = (i - kappa_min < depth) || (i >= kappa - depth);
+      if (in_depth_window)
+      {
+        insertion_threshold.mul(m.get_r_exp(i, i), delta);
+        /* r(i,i) is scaled by row_expo[i]^2, whereas projected_norm is
+           scaled by row_expo[kappa]^2. */
+        if (m.enable_row_expo)
+          insertion_threshold.mul_2si(insertion_threshold,
+                                      2 * (m.row_expo[i] - m.row_expo[kappa]));
+
+        if (projected_norm < insertion_threshold)
+        {
+          m.move_row(kappa, i);
+          n_swaps++;
+          kappa    = max(i - 1, kappa_min + 1);
+          inserted = true;
+          break;
+        }
+      }
+
+      /* ||pi_(i+1)(b_k)||^2 = ||pi_i(b_k)||^2 - mu(k,i)^2 r(i,i).
+         The unscaled accessors keep every term in b_k's row-exponent scale. */
+      contribution.mul(m.get_mu_exp(kappa, i), m.get_mu_exp(kappa, i));
+      contribution.mul(contribution, m.get_r_exp(i, i));
+      projected_norm.sub(projected_norm, contribution);
+    }
+
+    if (!inserted)
+      kappa++;
+  }
+
+  final_kappa = effective_end;
+  if (verbose)
+    cerr << "End of DeepLLL: success cputime=" << cputime() - start_time << endl;
+  return set_status(RED_SUCCESS);
+}
+
+template <class ZT, class FT>
 bool LLLReduction<ZT, FT>::babai(int kappa, int size_reduction_end, int size_reduction_start)
 {
   // FPLLL_TRACE_IN("kappa=" << kappa);

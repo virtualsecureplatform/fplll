@@ -733,6 +733,188 @@ int lll_reduction_z(ZZ_mat<ZT> &b, ZZ_mat<ZT> &u, ZZ_mat<ZT> &u_inv, double delt
   return status;
 }
 
+/**
+ * DeepLLL uses the same GSO backends as LLL, but invokes the bounded
+ * deep-insertion loop after the ordinary LLL pre-pass.
+ */
+template <class ZT, class FT>
+int deeplll_reduction_zf(ZZ_mat<ZT> &b, ZZ_mat<ZT> &u, ZZ_mat<ZT> &u_inv, int depth, double delta,
+                         double eta, LLLMethod method, int flags)
+{
+  if (b.get_rows() == 0 || b.get_cols() == 0)
+    return RED_SUCCESS;
+  int gso_flags = 0;
+  if (method == LM_PROVED)
+    gso_flags |= GSO_INT_GRAM;
+  if (method == LM_FAST)
+    gso_flags |= GSO_ROW_EXPO | GSO_OP_FORCE_LONG;
+  MatGSO<Z_NR<ZT>, FP_NR<FT>> m_gso(b, u, u_inv, gso_flags);
+  LLLReduction<Z_NR<ZT>, FP_NR<FT>> lll_obj(m_gso, delta, eta, flags);
+  lll_obj.deeplll(depth);
+  return lll_obj.status;
+}
+
+template <class ZT>
+int deeplll_reduction_z(ZZ_mat<ZT> &b, ZZ_mat<ZT> &u, ZZ_mat<ZT> &u_inv, int depth, double delta,
+                        double eta, LLLMethod method, IntType int_type, FloatType float_type,
+                        int precision, int flags)
+{
+  FPLLL_CHECK(depth >= 0, "DeepLLL depth must be non-negative");
+  FPLLL_CHECK(method != LM_WRAPPER,
+              "DeepLLL does not support the adaptive wrapper; use heuristic, fast, or proved");
+  FPLLL_CHECK(!(method == LM_PROVED && (flags & LLL_EARLY_RED)),
+              "DeepLLL method 'proved' with early reduction is not implemented");
+
+  const int good_prec = l2_min_prec(b.get_rows(), delta, eta, LLL_DEF_EPSILON);
+  int sel_prec        = (method == LM_PROVED) ? ((precision != 0) ? precision : good_prec)
+                                              : ((precision != 0) ? precision : PREC_DOUBLE);
+  FloatType sel_ft    = float_type;
+
+  if (precision != 0)
+  {
+    if (sel_ft == FT_DEFAULT)
+      sel_ft = FT_MPFR;
+    FPLLL_CHECK(sel_ft == FT_MPFR,
+                "The floating type must be mpfr when the precision is specified");
+  }
+
+  if (sel_ft == FT_DEFAULT)
+  {
+    if (method == LM_FAST)
+      sel_ft = FT_DOUBLE;
+#ifdef FPLLL_WITH_DPE
+    else if (sel_prec <= static_cast<int>(FP_NR<dpe_t>::get_prec()))
+      sel_ft = FT_DPE;
+#endif
+#ifdef FPLLL_WITH_QD
+    else if (sel_prec <= static_cast<int>(FP_NR<dd_real>::get_prec()))
+      sel_ft = FT_DD;
+    else if (sel_prec <= static_cast<int>(FP_NR<qd_real>::get_prec()))
+      sel_ft = FT_QD;
+#endif
+    else
+      sel_ft = FT_MPFR;
+  }
+  else if (method == LM_FAST &&
+           (sel_ft != FT_DOUBLE && sel_ft != FT_LONG_DOUBLE && sel_ft != FT_DD && sel_ft != FT_QD))
+  {
+    FPLLL_ABORT("'double' or 'long double' or 'dd' or 'qd' required for "
+                << LLL_METHOD_STR[method]);
+  }
+
+  if (sel_ft == FT_DOUBLE)
+    sel_prec = FP_NR<double>::get_prec();
+#ifdef FPLLL_WITH_LONG_DOUBLE
+  else if (sel_ft == FT_LONG_DOUBLE)
+    sel_prec = FP_NR<long double>::get_prec();
+#endif
+#ifdef FPLLL_WITH_DPE
+  else if (sel_ft == FT_DPE)
+    sel_prec = FP_NR<dpe_t>::get_prec();
+#endif
+#ifdef FPLLL_WITH_QD
+  else if (sel_ft == FT_DD)
+    sel_prec = FP_NR<dd_real>::get_prec();
+  else if (sel_ft == FT_QD)
+    sel_prec = FP_NR<qd_real>::get_prec();
+#endif
+
+  if (flags & LLL_VERBOSE)
+  {
+    cerr << "Starting DeepLLL method '" << LLL_METHOD_STR[method] << "'" << endl
+         << "  integer type '" << INT_TYPE_STR[int_type] << "'" << endl
+         << "  floating point type '" << FLOAT_TYPE_STR[sel_ft] << "'" << endl
+         << "  depth " << depth << endl
+         << "  The reduction is not guaranteed" << endl;
+  }
+
+  int status;
+  if (sel_ft == FT_DOUBLE)
+    status = deeplll_reduction_zf<ZT, double>(b, u, u_inv, depth, delta, eta, method, flags);
+#ifdef FPLLL_WITH_LONG_DOUBLE
+  else if (sel_ft == FT_LONG_DOUBLE)
+    status = deeplll_reduction_zf<ZT, long double>(b, u, u_inv, depth, delta, eta, method, flags);
+#endif
+#ifdef FPLLL_WITH_DPE
+  else if (sel_ft == FT_DPE)
+    status = deeplll_reduction_zf<ZT, dpe_t>(b, u, u_inv, depth, delta, eta, method, flags);
+#endif
+#ifdef FPLLL_WITH_QD
+  else if (sel_ft == FT_DD)
+  {
+    unsigned int old_cw;
+    fpu_fix_start(&old_cw);
+    status = deeplll_reduction_zf<ZT, dd_real>(b, u, u_inv, depth, delta, eta, method, flags);
+    fpu_fix_end(&old_cw);
+  }
+  else if (sel_ft == FT_QD)
+  {
+    unsigned int old_cw;
+    fpu_fix_start(&old_cw);
+    status = deeplll_reduction_zf<ZT, qd_real>(b, u, u_inv, depth, delta, eta, method, flags);
+    fpu_fix_end(&old_cw);
+  }
+#endif
+  else if (sel_ft == FT_MPFR)
+  {
+    const int old_prec = FP_NR<mpfr_t>::set_prec(sel_prec);
+    status = deeplll_reduction_zf<ZT, mpfr_t>(b, u, u_inv, depth, delta, eta, method, flags);
+    FP_NR<mpfr_t>::set_prec(old_prec);
+  }
+  else if (0 <= sel_ft && sel_ft <= FT_MPFR)
+  {
+    FPLLL_ABORT("Compiled without support for DeepLLL reduction with " << FLOAT_TYPE_STR[sel_ft]);
+  }
+  else
+  {
+    FPLLL_ABORT("Floating point type " << sel_ft << "not supported in DeepLLL");
+  }
+  zeros_first(b, u, u_inv);
+  return status;
+}
+
+#define FPLLL_DEFINE_DEEPLLL(T, id_t)                                                            \
+  int deeplll_reduction(ZZ_mat<T> &b, int depth, double delta, double eta, LLLMethod method,     \
+                        FloatType float_type, int precision, int flags)                           \
+  {                                                                                                \
+    ZZ_mat<T> empty_mat;                                                                          \
+    return deeplll_reduction_z<T>(b, empty_mat, empty_mat, depth, delta, eta, method, id_t,      \
+                                  float_type, precision, flags);                                  \
+  }                                                                                                \
+  int deeplll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, int depth, double delta, double eta,          \
+                        LLLMethod method, FloatType float_type, int precision, int flags)         \
+  {                                                                                                \
+    ZZ_mat<T> empty_mat;                                                                          \
+    if (!u.empty())                                                                                \
+      u.gen_identity(b.get_rows());                                                                \
+    return deeplll_reduction_z<T>(b, u, empty_mat, depth, delta, eta, method, id_t, float_type,  \
+                                  precision, flags);                                               \
+  }                                                                                                \
+  int deeplll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, ZZ_mat<T> &u_inv, int depth, double delta,    \
+                        double eta, LLLMethod method, FloatType float_type, int precision,        \
+                        int flags)                                                                 \
+  {                                                                                                \
+    if (!u.empty())                                                                                \
+      u.gen_identity(b.get_rows());                                                                \
+    if (!u_inv.empty())                                                                            \
+      u_inv.gen_identity(b.get_rows());                                                            \
+    u_inv.transpose();                                                                             \
+    const int status = deeplll_reduction_z<T>(b, u, u_inv, depth, delta, eta, method, id_t,       \
+                                               float_type, precision, flags);                       \
+    u_inv.transpose();                                                                             \
+    return status;                                                                                 \
+  }
+
+FPLLL_DEFINE_DEEPLLL(mpz_t, ZT_MPZ)
+
+#ifdef FPLLL_WITH_ZLONG
+FPLLL_DEFINE_DEEPLLL(long, ZT_LONG)
+#endif
+
+#ifdef FPLLL_WITH_ZDOUBLE
+FPLLL_DEFINE_DEEPLLL(double, ZT_DOUBLE)
+#endif
+
 // Verify if b is hlll reduced according to delta and eta
 // For FT != dpe and FT != mpfr
 // This function is not used, but can be used during a testing step.

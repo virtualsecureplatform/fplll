@@ -156,6 +156,34 @@ FPLLL_DECLARE_LLL(long)
 FPLLL_DECLARE_LLL(double)
 #endif
 
+/* DeepLLL is a bounded deep-insertion reduction.  It intentionally defaults
+   to the heuristic GSO mode: unlike ordinary LLL, it has no wrapper method
+   with a proved adaptive-precision guarantee. */
+#define FPLLL_DECLARE_DEEPLLL(T)                                                                  \
+  int deeplll_reduction(ZZ_mat<T> &b, int depth = DEEPLLL_DEF_DEPTH,                             \
+                        double delta = LLL_DEF_DELTA, double eta = LLL_DEF_ETA,                  \
+                        LLLMethod method = LM_HEURISTIC, FloatType float_type = FT_DEFAULT,      \
+                        int precision = 0, int flags = LLL_DEFAULT);                             \
+  int deeplll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, int depth = DEEPLLL_DEF_DEPTH,                \
+                        double delta = LLL_DEF_DELTA, double eta = LLL_DEF_ETA,                  \
+                        LLLMethod method = LM_HEURISTIC, FloatType float_type = FT_DEFAULT,      \
+                        int precision = 0, int flags = LLL_DEFAULT);                             \
+  int deeplll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, ZZ_mat<T> &u_inv,                             \
+                        int depth = DEEPLLL_DEF_DEPTH, double delta = LLL_DEF_DELTA,             \
+                        double eta = LLL_DEF_ETA, LLLMethod method = LM_HEURISTIC,                \
+                        FloatType float_type = FT_DEFAULT, int precision = 0,                    \
+                        int flags = LLL_DEFAULT);
+
+FPLLL_DECLARE_DEEPLLL(mpz_t)
+
+#ifdef FPLLL_WITH_ZLONG
+FPLLL_DECLARE_DEEPLLL(long)
+#endif
+
+#ifdef FPLLL_WITH_ZDOUBLE
+FPLLL_DECLARE_DEEPLLL(double)
+#endif
+
 // HLLL
 
 /**
