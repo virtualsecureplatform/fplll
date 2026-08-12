@@ -161,6 +161,70 @@ template <class ZT> int deeplll(Options &o, ZZ_mat<ZT> &b)
   return status;
 }
 
+template <class ZT> int potlll(Options &o, ZZ_mat<ZT> &b)
+{
+  ZZ_mat<ZT> u(1, 1), u_inv(1, 1);
+  const char *format = o.output_format ? o.output_format : "b";
+  int flags = 0;
+  if (o.verbose)
+    flags |= LLL_VERBOSE;
+  if (o.early_red)
+    flags |= LLL_EARLY_RED;
+  FPLLL_CHECK(!o.siegel, "Siegel's condition is not supported by PotLLL");
+
+  const LLLMethod method = (o.method == LM_WRAPPER) ? LM_HEURISTIC : o.method;
+  int status;
+  if (strchr(format, 'v') != NULL)
+    status = potlll_reduction(b, u, u_inv, o.delta, o.eta, method, o.float_type, o.precision, flags);
+  else if (strchr(format, 'u') != NULL)
+    status = potlll_reduction(b, u, o.delta, o.eta, method, o.float_type, o.precision, flags);
+  else
+    status = potlll_reduction(b, o.delta, o.eta, method, o.float_type, o.precision, flags);
+
+  for (int i = 0; format[i]; i++)
+  {
+    switch (format[i])
+    {
+    case 'b':
+      if (format[i + 1] == 'k')
+      {
+        b.print_comma(cout);
+        i++;
+      }
+      else
+        cout << b << endl;
+      break;
+    case 'u':
+      if (format[i + 1] == 'k')
+      {
+        u.print_comma(cout);
+        i++;
+      }
+      else
+        cout << u << endl;
+      break;
+    case 'v':
+      if (format[i + 1] == 'k')
+      {
+        u_inv.print_comma(cout);
+        i++;
+      }
+      else
+        cout << u_inv << endl;
+      break;
+    case 't':
+      cout << status << endl;
+      break;
+    case ' ':
+      cout << endl;
+      break;
+    }
+  }
+  if (status != RED_SUCCESS)
+    cerr << "Failure: " << get_red_status_str(status) << endl;
+  return status;
+}
+
 /* BKZ reduction */
 
 void read_pruning_vector(const char *file_name, PruningParams &pr, int n)
@@ -534,6 +598,9 @@ template <class ZT> int run_action(Options &o)
   case ACTION_DEEPLLL:
     result = deeplll(o, m);
     break;
+  case ACTION_POTLLL:
+    result = potlll(o, m);
+    break;
   case ACTION_PRU:
     result = prune(o, m);
     break;
@@ -583,6 +650,8 @@ void read_options(int argc, char **argv, Options &o)
         o.action = ACTION_HLLL;
       else if (strcmp(argv[ac], "deeplll") == 0)
         o.action = ACTION_DEEPLLL;
+      else if (strcmp(argv[ac], "potlll") == 0)
+        o.action = ACTION_POTLLL;
       else if (strcmp(argv[ac], "pru") == 0)
         o.action = ACTION_PRU;
       else
@@ -779,9 +848,10 @@ void read_options(int argc, char **argv, Options &o)
       cout << "Usage: " << argv[0] << " [options] [file]\n"
 
            << "List of options:\n"
-           << "  -a [lll|deeplll|bkz|deepbkz|hkz|svp|sdb|sld|cvp]\n"
+           << "  -a [lll|deeplll|potlll|bkz|deepbkz|hkz|svp|sdb|sld|cvp]\n"
            << "       lll = LLL-reduce the input matrix (default)\n"
            << "       deeplll = DeepLLL-reduce the input matrix\n"
+           << "       potlll = PotLLL-reduce the input matrix\n"
            << "       bkz = BKZ-reduce the input matrix\n"
            << "       deepbkz = BKZ with DeepLLL preprocessing and postprocessing\n"
            << "       hkz = HKZ-reduce the input matrix\n"

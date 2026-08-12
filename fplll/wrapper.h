@@ -184,6 +184,31 @@ FPLLL_DECLARE_DEEPLLL(long)
 FPLLL_DECLARE_DEEPLLL(double)
 #endif
 
+/* PotLLL uses potential-minimising deep insertions.  As for DeepLLL, the
+   adaptive wrapper is unavailable and the heuristic GSO mode is the default. */
+#define FPLLL_DECLARE_POTLLL(T)                                                                   \
+  int potlll_reduction(ZZ_mat<T> &b, double delta = LLL_DEF_DELTA, double eta = LLL_DEF_ETA,     \
+                       LLLMethod method = LM_HEURISTIC, FloatType float_type = FT_DEFAULT,       \
+                       int precision = 0, int flags = LLL_DEFAULT);                              \
+  int potlll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, double delta = LLL_DEF_DELTA,                  \
+                       double eta = LLL_DEF_ETA, LLLMethod method = LM_HEURISTIC,                \
+                       FloatType float_type = FT_DEFAULT, int precision = 0,                     \
+                       int flags = LLL_DEFAULT);                                                  \
+  int potlll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, ZZ_mat<T> &u_inv,                              \
+                       double delta = LLL_DEF_DELTA, double eta = LLL_DEF_ETA,                   \
+                       LLLMethod method = LM_HEURISTIC, FloatType float_type = FT_DEFAULT,       \
+                       int precision = 0, int flags = LLL_DEFAULT);
+
+FPLLL_DECLARE_POTLLL(mpz_t)
+
+#ifdef FPLLL_WITH_ZLONG
+FPLLL_DECLARE_POTLLL(long)
+#endif
+
+#ifdef FPLLL_WITH_ZDOUBLE
+FPLLL_DECLARE_POTLLL(double)
+#endif
+
 // HLLL
 
 /**

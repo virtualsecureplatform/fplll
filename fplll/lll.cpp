@@ -243,6 +243,99 @@ bool LLLReduction<ZT, FT>::deeplll(int depth, int kappa_min, int kappa_start, in
 }
 
 template <class ZT, class FT>
+bool LLLReduction<ZT, FT>::potlll(int kappa_min, int kappa_start, int kappa_end,
+                                  int size_reduction_start)
+{
+  FPLLL_CHECK(!siegel, "Siegel's condition is not supported by PotLLL");
+  if (kappa_end == -1)
+    kappa_end = m.d;
+
+  FPLLL_DEBUG_CHECK(kappa_min <= kappa_start && kappa_start < kappa_end && kappa_end <= m.d);
+
+  /* The LLL preprocessing step is part of the practical PotLLL algorithm. */
+  if (!lll(kappa_min, kappa_start, kappa_end, size_reduction_start))
+    return false;
+
+  const int effective_end = kappa_end - zeros;
+  int kappa               = kappa_start + 1;
+  FT log_potential;
+  FT min_log_potential;
+  FT log_delta;
+  FT log_two;
+  FT projected_norm;
+  FT contribution;
+  FT log_quotient;
+  FT log_denominator;
+
+  log_delta.log(delta);
+  log_two.log(2);
+
+  if (verbose)
+    cerr << "Entering PotLLL" << endl;
+
+  while (kappa < effective_end)
+  {
+    if (!babai(kappa, kappa, size_reduction_start))
+    {
+      final_kappa = kappa;
+      return false;
+    }
+    if (!m.update_gso_row(kappa))
+    {
+      final_kappa = kappa;
+      return set_status(RED_GSO_FAILURE);
+    }
+
+    /* P_{j,k} = Pot(sigma_{j,k} B) / Pot(B).  The running projected norm is
+       ||pi_j(b_k)||^2 and is held in b_k's row-exponent scale. */
+    log_potential     = 0.0;
+    min_log_potential = 0.0;
+    int insertion = kappa;
+    projected_norm = m.get_r_exp(kappa, kappa);
+    for (int j = kappa - 1; j >= kappa_min; j--)
+    {
+      contribution.mul(m.get_mu_exp(kappa, j), m.get_mu_exp(kappa, j));
+      contribution.mul(contribution, m.get_r_exp(j, j));
+      projected_norm.add(projected_norm, contribution);
+
+      /* Compare products of quotients in log-space.  This preserves the
+         potential ordering without overflowing for long insertion paths. */
+      log_quotient.log(projected_norm);
+      log_denominator.log(m.get_r_exp(j, j));
+      log_quotient.sub(log_quotient, log_denominator);
+      if (m.enable_row_expo)
+      {
+        log_denominator = log_two;
+        log_denominator *= 2.0 * static_cast<double>(m.row_expo[kappa] - m.row_expo[j]);
+        log_quotient.add(log_quotient, log_denominator);
+      }
+      log_potential.add(log_potential, log_quotient);
+      if (log_potential < min_log_potential)
+      {
+        min_log_potential = log_potential;
+        insertion         = j;
+      }
+    }
+
+    if (log_delta > min_log_potential)
+    {
+      m.move_row(kappa, insertion);
+      n_swaps++;
+      kappa = insertion;
+    }
+    else
+    {
+      kappa++;
+    }
+  }
+
+  final_kappa = effective_end;
+  if (verbose)
+    cerr << "End of PotLLL: success" << endl;
+  return set_status(RED_SUCCESS);
+}
+
+template <class ZT, class FT>
 bool LLLReduction<ZT, FT>::babai(int kappa, int size_reduction_end, int size_reduction_start)
 {
   // FPLLL_TRACE_IN("kappa=" << kappa);

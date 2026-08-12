@@ -69,6 +69,20 @@ public:
                int size_reduction_start = 0);
 
   /**
+     @brief PotLLL reduction with potential-minimising deep insertions.
+
+     After an LLL pre-pass, PotLLL inserts the current vector at the position
+     which minimises the potential quotient.  An insertion is made only when
+     that quotient is strictly smaller than ``delta``.  This is Algorithm 2 of
+     Fontein, Schneider and Wagner, "PotLLL: a polynomial time version of LLL
+     with deep insertions".
+
+     @return success or failure (due to numerical instability)
+  */
+  bool potlll(int kappa_min = 0, int kappa_start = 0, int kappa_end = -1,
+              int size_reduction_start = 0);
+
+  /**
      @brief Size reduction.
 
      Perform size reduction for all vectors between `kappa_start` and `kappa_end`.

@@ -915,6 +915,162 @@ FPLLL_DEFINE_DEEPLLL(long, ZT_LONG)
 FPLLL_DEFINE_DEEPLLL(double, ZT_DOUBLE)
 #endif
 
+template <class ZT, class FT>
+int potlll_reduction_zf(ZZ_mat<ZT> &b, ZZ_mat<ZT> &u, ZZ_mat<ZT> &u_inv, double delta, double eta,
+                        LLLMethod method, int flags)
+{
+  if (b.get_rows() == 0 || b.get_cols() == 0)
+    return RED_SUCCESS;
+  int gso_flags = 0;
+  if (method == LM_PROVED)
+    gso_flags |= GSO_INT_GRAM;
+  if (method == LM_FAST)
+    gso_flags |= GSO_ROW_EXPO | GSO_OP_FORCE_LONG;
+  MatGSO<Z_NR<ZT>, FP_NR<FT>> m_gso(b, u, u_inv, gso_flags);
+  LLLReduction<Z_NR<ZT>, FP_NR<FT>> lll_obj(m_gso, delta, eta, flags);
+  lll_obj.potlll();
+  return lll_obj.status;
+}
+
+template <class ZT>
+int potlll_reduction_z(ZZ_mat<ZT> &b, ZZ_mat<ZT> &u, ZZ_mat<ZT> &u_inv, double delta, double eta,
+                       LLLMethod method, IntType int_type, FloatType float_type, int precision,
+                       int flags)
+{
+  FPLLL_CHECK(method != LM_WRAPPER,
+              "PotLLL does not support the adaptive wrapper; use heuristic, fast, or proved");
+  FPLLL_CHECK(!(method == LM_PROVED && (flags & LLL_EARLY_RED)),
+              "PotLLL method 'proved' with early reduction is not implemented");
+
+  const int good_prec = l2_min_prec(b.get_rows(), delta, eta, LLL_DEF_EPSILON);
+  int sel_prec        = (method == LM_PROVED) ? ((precision != 0) ? precision : good_prec)
+                                              : ((precision != 0) ? precision : PREC_DOUBLE);
+  FloatType sel_ft    = float_type;
+  if (precision != 0)
+  {
+    if (sel_ft == FT_DEFAULT)
+      sel_ft = FT_MPFR;
+    FPLLL_CHECK(sel_ft == FT_MPFR,
+                "The floating type must be mpfr when the precision is specified");
+  }
+  if (sel_ft == FT_DEFAULT)
+  {
+    if (method == LM_FAST)
+      sel_ft = FT_DOUBLE;
+#ifdef FPLLL_WITH_DPE
+    else if (sel_prec <= static_cast<int>(FP_NR<dpe_t>::get_prec()))
+      sel_ft = FT_DPE;
+#endif
+#ifdef FPLLL_WITH_QD
+    else if (sel_prec <= static_cast<int>(FP_NR<dd_real>::get_prec()))
+      sel_ft = FT_DD;
+    else if (sel_prec <= static_cast<int>(FP_NR<qd_real>::get_prec()))
+      sel_ft = FT_QD;
+#endif
+    else
+      sel_ft = FT_MPFR;
+  }
+  else if (method == LM_FAST &&
+           (sel_ft != FT_DOUBLE && sel_ft != FT_LONG_DOUBLE && sel_ft != FT_DD && sel_ft != FT_QD))
+  {
+    FPLLL_ABORT("'double' or 'long double' or 'dd' or 'qd' required for "
+                << LLL_METHOD_STR[method]);
+  }
+
+  if (flags & LLL_VERBOSE)
+  {
+    cerr << "Starting PotLLL method '" << LLL_METHOD_STR[method] << "'" << endl
+         << "  integer type '" << INT_TYPE_STR[int_type] << "'" << endl
+         << "  floating point type '" << FLOAT_TYPE_STR[sel_ft] << "'" << endl
+         << "  The reduction is not guaranteed" << endl;
+  }
+
+  int status;
+  if (sel_ft == FT_DOUBLE)
+    status = potlll_reduction_zf<ZT, double>(b, u, u_inv, delta, eta, method, flags);
+#ifdef FPLLL_WITH_LONG_DOUBLE
+  else if (sel_ft == FT_LONG_DOUBLE)
+    status = potlll_reduction_zf<ZT, long double>(b, u, u_inv, delta, eta, method, flags);
+#endif
+#ifdef FPLLL_WITH_DPE
+  else if (sel_ft == FT_DPE)
+    status = potlll_reduction_zf<ZT, dpe_t>(b, u, u_inv, delta, eta, method, flags);
+#endif
+#ifdef FPLLL_WITH_QD
+  else if (sel_ft == FT_DD)
+  {
+    unsigned int old_cw;
+    fpu_fix_start(&old_cw);
+    status = potlll_reduction_zf<ZT, dd_real>(b, u, u_inv, delta, eta, method, flags);
+    fpu_fix_end(&old_cw);
+  }
+  else if (sel_ft == FT_QD)
+  {
+    unsigned int old_cw;
+    fpu_fix_start(&old_cw);
+    status = potlll_reduction_zf<ZT, qd_real>(b, u, u_inv, delta, eta, method, flags);
+    fpu_fix_end(&old_cw);
+  }
+#endif
+  else if (sel_ft == FT_MPFR)
+  {
+    const int old_prec = FP_NR<mpfr_t>::set_prec(sel_prec);
+    status = potlll_reduction_zf<ZT, mpfr_t>(b, u, u_inv, delta, eta, method, flags);
+    FP_NR<mpfr_t>::set_prec(old_prec);
+  }
+  else if (0 <= sel_ft && sel_ft <= FT_MPFR)
+  {
+    FPLLL_ABORT("Compiled without support for PotLLL reduction with " << FLOAT_TYPE_STR[sel_ft]);
+  }
+  else
+  {
+    FPLLL_ABORT("Floating point type " << sel_ft << "not supported in PotLLL");
+  }
+  zeros_first(b, u, u_inv);
+  return status;
+}
+
+#define FPLLL_DEFINE_POTLLL(T, id_t)                                                             \
+  int potlll_reduction(ZZ_mat<T> &b, double delta, double eta, LLLMethod method,                 \
+                       FloatType float_type, int precision, int flags)                            \
+  {                                                                                                \
+    ZZ_mat<T> empty_mat;                                                                          \
+    return potlll_reduction_z<T>(b, empty_mat, empty_mat, delta, eta, method, id_t, float_type, \
+                                 precision, flags);                                                \
+  }                                                                                                \
+  int potlll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, double delta, double eta, LLLMethod method,   \
+                       FloatType float_type, int precision, int flags)                            \
+  {                                                                                                \
+    ZZ_mat<T> empty_mat;                                                                          \
+    if (!u.empty())                                                                                \
+      u.gen_identity(b.get_rows());                                                                \
+    return potlll_reduction_z<T>(b, u, empty_mat, delta, eta, method, id_t, float_type,          \
+                                 precision, flags);                                                \
+  }                                                                                                \
+  int potlll_reduction(ZZ_mat<T> &b, ZZ_mat<T> &u, ZZ_mat<T> &u_inv, double delta, double eta,   \
+                       LLLMethod method, FloatType float_type, int precision, int flags)         \
+  {                                                                                                \
+    if (!u.empty())                                                                                \
+      u.gen_identity(b.get_rows());                                                                \
+    if (!u_inv.empty())                                                                            \
+      u_inv.gen_identity(b.get_rows());                                                            \
+    u_inv.transpose();                                                                             \
+    const int status = potlll_reduction_z<T>(b, u, u_inv, delta, eta, method, id_t, float_type, \
+                                              precision, flags);                                   \
+    u_inv.transpose();                                                                             \
+    return status;                                                                                 \
+  }
+
+FPLLL_DEFINE_POTLLL(mpz_t, ZT_MPZ)
+
+#ifdef FPLLL_WITH_ZLONG
+FPLLL_DEFINE_POTLLL(long, ZT_LONG)
+#endif
+
+#ifdef FPLLL_WITH_ZDOUBLE
+FPLLL_DEFINE_POTLLL(double, ZT_DOUBLE)
+#endif
+
 // Verify if b is hlll reduced according to delta and eta
 // For FT != dpe and FT != mpfr
 // This function is not used, but can be used during a testing step.
