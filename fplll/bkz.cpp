@@ -612,7 +612,7 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
 {
   bool clean     = true;
   int block_size = par.block_size;
-  for (int kappa = min_row; kappa < max_row - block_size; ++kappa)
+  for (int kappa = min_row; kappa < max_row - block_size; kappa += par.tour_step)
   {
     clean &= svp_reduction(kappa, block_size, par);
     if ((par.flags & BKZ_VERBOSE) && kappa_max < kappa && clean)
@@ -787,6 +787,8 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
 
   if (param.block_size < 2)
     return set_status(RED_SUCCESS);
+  if (param.tour_step < 1)
+    throw std::runtime_error("BKZ tour_step must be positive");
 
   int i = 0;
 

@@ -121,12 +121,13 @@ public:
            int auto_abort_max_no_dec      = BKZ_DEF_AUTO_ABORT_MAX_NO_DEC,
            double gh_factor               = BKZ_DEF_GH_FACTOR,
            double min_success_probability = BKZ_DEF_MIN_SUCCESS_PROBABILITY,
-           int rerandomization_density    = BKZ_DEF_RERANDOMIZATION_DENSITY)
+           int rerandomization_density    = BKZ_DEF_RERANDOMIZATION_DENSITY,
+           int tour_step                  = 1)
       : block_size(block_size), strategies(strategies), delta(delta), flags(flags),
         max_loops(max_loops), max_time(max_time), auto_abort_scale(auto_abort_scale),
         auto_abort_max_no_dec(auto_abort_max_no_dec), gh_factor(gh_factor),
         dump_gso_filename("gso.json"), min_success_probability(min_success_probability),
-        rerandomization_density(rerandomization_density)
+        rerandomization_density(rerandomization_density), tour_step(tour_step)
   {
 
     // we create dummy strategies
@@ -181,6 +182,16 @@ public:
   /** density of rerandomization operation when using extreme pruning **/
 
   int rerandomization_density;
+
+  /**
+     Distance between consecutive primal blocks in a BKZ tour.
+
+     The default of one retains ordinary BKZ.  Larger values implement a
+     heuristic jumping tour: fewer overlapping blocks are SVP-reduced, so the
+     output is not guaranteed to be BKZ-reduced.  This is intended for the
+     local-basis-processing/jumping schedules used by progressive BKZ.
+  */
+  int tour_step;
 };
 
 /**

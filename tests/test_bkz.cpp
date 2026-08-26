@@ -317,12 +317,27 @@ int test_linear_dep()
   return test_bkz_param<mpz_t>(A, 3);
 }
 
+int test_bkz_jump()
+{
+  ZZ_mat<mpz_t> A;
+  if (read_file(A, TESTDATADIR "/tests/lattices/example_in") != 0)
+    return 1;
+
+  vector<Strategy> strategies;
+  BKZParam param(5, strategies);
+  param.tour_step = 2;
+  param.flags |= BKZ_MAX_LOOPS;
+  param.max_loops = 2;
+  return bkz_reduction(&A, NULL, param, FT_DOUBLE, 0) == RED_BKZ_LOOPS_LIMIT ? 0 : 1;
+}
+
 int main(int /*argc*/, char ** /*argv*/)
 {
 
   int status = 0;
 
   status |= test_linear_dep();
+  status |= test_bkz_jump();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD
