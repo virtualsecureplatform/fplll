@@ -280,7 +280,7 @@ Without any of the last three options, BKZ runs until no block has been updated 
 * `-s filename.json` :         use strategies for preprocessing and pruning parameter (/strategies/default.json provided). Experimental.
 
 * `-bkzghbound factor` :       multiplies the Gaussian heuristic by `factor` (of float type) to set the enumeration radius of the SVP calls.
-* `-bkzboundedlll` :	       restricts the LLL call before considering a block to vector indices within that block.
+* `-bkzboundedlll` :         confines LLL and recursive preprocessing to the current block. In the C++ API, bounded `BKZReduction::svp_preprocessing` can optionally return the exact local unimodular `RowTransform`; the transform is already applied to the parent GSO and should only be replayed on a detached basis.
 
 * `-bkzdumpgso file_name` :     dumps the log ||b_i*|| 's in specified file.
 

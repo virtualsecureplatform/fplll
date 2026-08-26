@@ -376,6 +376,7 @@ int test_scoped_row_transform()
   MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(basis, u, u_inv_t, GSO_DEFAULT);
   gso.discover_all_rows();
   RowTransform<Z_NR<mpz_t>> transform;
+  RowTransform<Z_NR<mpz_t>> nested_transform;
   {
     ScopedRowTransformRecorder<Z_NR<mpz_t>, FP_NR<double>> recorder(gso, 1, 4, transform);
     FP_NR<double> coefficient;
@@ -383,11 +384,18 @@ int test_scoped_row_transform()
     gso.row_op_begin(1, 4);
     gso.row_addmul(3, 1, coefficient);
     gso.row_op_end(1, 4);
-    gso.negate_row_of_b(2);
+    {
+      ScopedRowTransformRecorder<Z_NR<mpz_t>, FP_NR<double>> nested(gso, 1, 3,
+                                                                    nested_transform);
+      gso.negate_row_of_b(2);
+    }
     gso.move_row(3, 1);
   }
 
   if (transform.empty() || transform.dimension() != 3)
+    return 1;
+  if (nested_transform.dimension() != 2 || nested_transform.matrix()(0, 0) != 1 ||
+      nested_transform.matrix()(1, 1) != -1)
     return 1;
   for (int row = 0; row < 3; ++row)
     for (int column = 0; column < basis.get_cols(); ++column)
@@ -397,6 +405,10 @@ int test_scoped_row_transform()
       for (int source = 0; source < 3; ++source)
         expected.addmul(transform.matrix()(row, source), original(1 + source, column));
       if (basis(1 + row, column) != expected)
+        return 1;
+      const Z_NR<mpz_t> expected_u = column == 0 ? Z_NR<mpz_t>()
+                                                  : transform.matrix()(row, column - 1);
+      if (u(1 + row, column) != expected_u)
         return 1;
     }
 
@@ -461,11 +473,14 @@ int test_local_block_transform()
   ZZ_mat<mpz_t> expected = A;
 
   LocalBlockTransform transform(2);
-  transform.row_addmul_si(1, 0, 2);
+  Z_NR<mpz_t> large_coefficient;
+  large_coefficient = 1;
+  large_coefficient.mul_2si(large_coefficient, 80);
+  transform.row_addmul(1, 0, large_coefficient);
   transform.negate_row(0);
   transform.move_row(0, 1);
 
-  expected[2].addmul_si(expected[1], 2);
+  expected[2].addmul(expected[1], large_coefficient);
   for (int j = 0; j < expected.get_cols(); ++j)
     expected(1, j).neg(expected(1, j));
   expected.rotate_left(1, 2);
