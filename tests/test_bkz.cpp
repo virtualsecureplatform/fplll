@@ -394,6 +394,26 @@ int test_local_block_transform()
   return gso.update_gso() ? 0 : 1;
 }
 
+int test_local_postprocessing()
+{
+  ZZ_mat<mpz_t> A(4, 4), U, UT;
+  A.gen_identity(4);
+  A(2, 0) = 7;
+  U.gen_identity(4);
+  MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(A, U, UT, GSO_DEFAULT);
+  gso.discover_all_rows();
+  LLLReduction<Z_NR<mpz_t>, FP_NR<double>> lll(gso, LLL_DEF_DELTA, LLL_DEF_ETA, LLL_DEFAULT);
+  vector<Strategy> strategies;
+  BKZParam param(2, strategies);
+  BKZReduction<Z_NR<mpz_t>, FP_NR<double>> bkz(gso, lll, param);
+
+  LocalBlockTransform transform(2);
+  transform.row_addmul_si(1, 0, 3);
+  if (bkz.local_postprocessing(1, 2, transform))
+    return 1;
+  return gso.update_gso() ? 0 : 1;
+}
+
 int main(int /*argc*/, char ** /*argv*/)
 {
 
@@ -404,6 +424,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
   status |= test_local_block_transform();
+  status |= test_local_postprocessing();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD
