@@ -38,7 +38,7 @@ long double beta_fraction(long double a, long double b, long double x)
     d = tiny;
   d = 1.0L / d;
   long double h = d;
-  for (int m = 1; m <= 200; ++m)
+  for (int m = 1; m <= 100; ++m)
   {
     const int m2 = 2 * m;
     long double aa = m * (b - m) * x / ((qam + m2) * (a + m2));
@@ -56,7 +56,7 @@ long double beta_fraction(long double a, long double b, long double x)
     d = 1.0L / d;
     const long double delta = d * c;
     h *= delta;
-    if (fabsl(delta - 1.0L) < 1e-16L)
+    if (fabsl(delta - 1.0L) < 1e-14L)
       break;
   }
   return h;
@@ -76,7 +76,7 @@ long double regularized_beta(long double a, long double b, long double x)
 long double inverse_regularized_beta(long double a, long double b, long double probability)
 {
   long double low = 0.0L, high = 1.0L;
-  for (int iteration = 0; iteration < 100; ++iteration)
+  for (int iteration = 0; iteration < 50; ++iteration)
   {
     const long double middle = 0.5L * (low + high);
     if (regularized_beta(a, b, middle) < probability)
@@ -222,7 +222,7 @@ std::vector<long double> pbkz_simulate_gso(int dimension, int beta)
     long double low = probability, high = 0.5L;
     if (low > high)
       low = high;
-    for (int iteration = 0; iteration < 80; ++iteration)
+    for (int iteration = 0; iteration < 35; ++iteration)
     {
       const long double candidate = 0.5L * (low + high);
       const long double used_alpha = powl(0.5L * candidate, -1.0L / local_beta);
