@@ -31,6 +31,7 @@ struct LocalBlockOperation
   enum Type
   {
     SWAP,
+    MOVE,
     NEGATE,
     ADDMUL
   };
@@ -72,6 +73,19 @@ public:
     operations.push_back({LocalBlockOperation::SWAP, first, second, 0});
   }
 
+  void move_row(int old_row, int new_row)
+  {
+    check_index(old_row);
+    check_index(new_row);
+    if (old_row == new_row)
+      return;
+    if (new_row < old_row)
+      transform.rotate_right(new_row, old_row);
+    else
+      transform.rotate_left(old_row, new_row);
+    operations.push_back({LocalBlockOperation::MOVE, old_row, new_row, 0});
+  }
+
   void negate_row(int row)
   {
     check_index(row);
@@ -103,6 +117,9 @@ public:
       {
       case LocalBlockOperation::SWAP:
         gso.row_swap(min(first, second), max(first, second));
+        break;
+      case LocalBlockOperation::MOVE:
+        gso.move_row(first, second);
         break;
       case LocalBlockOperation::NEGATE:
         gso.negate_row_of_b(first);

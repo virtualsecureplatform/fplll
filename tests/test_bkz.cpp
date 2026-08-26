@@ -375,12 +375,12 @@ int test_local_block_transform()
   LocalBlockTransform transform(2);
   transform.row_addmul_si(1, 0, 2);
   transform.negate_row(0);
-  transform.row_swap(0, 1);
+  transform.move_row(0, 1);
 
   expected[2].addmul_si(expected[1], 2);
   for (int j = 0; j < expected.get_cols(); ++j)
     expected(1, j).neg(expected(1, j));
-  expected.swap_rows(1, 2);
+  expected.rotate_left(1, 2);
 
   MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(A, U, UT, GSO_DEFAULT);
   gso.discover_all_rows();
