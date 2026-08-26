@@ -401,6 +401,11 @@ int bkz_reduction(ZZ_mat<mpz_t> *B, ZZ_mat<mpz_t> *U, const BKZParam &param,
 int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
                               FloatType float_type = FT_DEFAULT, int precision = 0);
 
+/** Automatically advance beta when FEC(B) reaches the paper's Sim-FEC(n,beta). */
+int adaptive_progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const BKZParam &param,
+                                       int start_block_size,
+                                       FloatType float_type = FT_DEFAULT, int precision = 0);
+
 /**
  * @brief Performs block reduction without transformation matrix.
  *

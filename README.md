@@ -271,6 +271,7 @@ Options for BKZ-reduction:
 
 * `-bkzmaxloops loops` :       maximum number of full loop iterations.
 * `-bkzprogressive b1,b2,...,bn` : runs the listed strictly increasing BKZ block sizes in sequence. A configured loop or time limit terminates the current stage and advances to the next one. `-b`, when also present, must equal `bn`.
+* `-bkzprogressive auto[:start]` : implements the adaptive progressive BKZ loop from Aono--Nguyen--Shen. It starts at block size 10 by default (or `start`), measures the basis FEC, and advances automatically whenever `FEC(B) <= Sim-FEC(n,beta)`. `-b` specifies the final target. With this mode, `-bkzmaxloops` is an optional per-beta safety limit and stops the reduction if the threshold has not been reached.
 * `-bkzmaxtime time` :         stops after `time` seconds (up to completion of the current loop iteration).
 * `-bkzmaxrows rows` :         limits every primal BKZ tour to the first `rows` basis vectors. This is intended for truncated final tours and deliberately leaves the remaining tail unreduced.
 * `-bkzjump step` :            visits every `step`-th primal BKZ block. Values above one are heuristic jumping tours and do not produce a fully BKZ-reduced basis.
@@ -284,17 +285,21 @@ Without any of the last three options, BKZ runs until no block has been updated 
 * `-bkzboundedlll` :         confines LLL and recursive preprocessing to the current block. In the C++ API, bounded `BKZReduction::svp_preprocessing` can optionally return the exact local unimodular `RowTransform`; the transform is already applied to the parent GSO and should only be replayed on a detached basis.
 
 For example, preprocess an instance with PotLLL at 256-bit MPFR precision and
-then run one tour at each stage of a progressive BKZ schedule:
+then run paper-aligned adaptive progressive BKZ to block size 74:
 
 ```sh
 fplll -a potlll -f mpfr -p 256 -of b input.txt > potlll-256.txt
-fplll -a bkz -bkzprogressive 40,45,50,55,60,65,70,74 \
-  -bkzmaxloops 1 -bkzboundedlll -f mpfr -p 256 \
+fplll -a bkz -b 74 -bkzprogressive auto -nolll \
+  -bkzboundedlll -f mpfr -p 256 \
   -s strategies/default.json -of b potlll-256.txt > progressive-74.txt
 ```
 
 The PotLLL step is deliberately separate: `-a potlllbkz` would instead use
 PotLLL during every BKZ block's preprocessing and is a different algorithm.
+The adaptive command needs no manually selected intermediate block sizes. It
+also checks the initial PotLLL basis and skips every quality level that it has
+already reached. Omit `-nolll` when the input has not been preprocessed; the
+adaptive runner then performs the paper's initial LLL step itself.
 
 * `-bkzdumpgso file_name` :     dumps the log ||b_i*|| 's in specified file.
 

@@ -277,12 +277,20 @@ static void configure_bkz_param(BKZParam &param, const Options &o)
 
 template <> int bkz(Options &o, ZZ_mat<mpz_t> &b)
 {
-  const bool progressive = !o.bkz_progressive_stages.empty();
+  const bool adaptive_progressive = o.bkz_progressive_auto_start > 0;
+  const bool progressive = adaptive_progressive || !o.bkz_progressive_stages.empty();
   if (progressive)
   {
-    CHECK(o.block_size == 0 || o.block_size == o.bkz_progressive_stages.back(),
-          "-b must equal the final -bkzprogressive stage");
-    o.block_size = o.bkz_progressive_stages.back();
+    if (adaptive_progressive)
+    {
+      CHECK(o.block_size > 0, "-b is required with '-bkzprogressive auto'");
+    }
+    else
+    {
+      CHECK(o.block_size == 0 || o.block_size == o.bkz_progressive_stages.back(),
+            "-b must equal the final -bkzprogressive stage");
+      o.block_size = o.bkz_progressive_stages.back();
+    }
   }
   CHECK(o.block_size > 0, "Option -b or -bkzprogressive is missing");
   CHECK(o.block_size <= b.get_rows(), "BKZ block size exceeds the basis dimension");
@@ -308,14 +316,20 @@ template <> int bkz(Options &o, ZZ_mat<mpz_t> &b)
   {
     CHECK(strchr(format, 'u') == NULL,
           "transformation output is not supported by progressive BKZ");
-    vector<BKZParam> stages;
-    stages.reserve(o.bkz_progressive_stages.size());
-    for (int block_size : o.bkz_progressive_stages)
+    if (adaptive_progressive)
+      status = adaptive_progressive_bkz_reduction(&b, param, o.bkz_progressive_auto_start,
+                                                  o.float_type, o.precision);
+    else
     {
-      stages.emplace_back(block_size, strategies);
-      configure_bkz_param(stages.back(), o);
+      vector<BKZParam> stages;
+      stages.reserve(o.bkz_progressive_stages.size());
+      for (int block_size : o.bkz_progressive_stages)
+      {
+        stages.emplace_back(block_size, strategies);
+        configure_bkz_param(stages.back(), o);
+      }
+      status = progressive_bkz_reduction(&b, stages, o.float_type, o.precision);
     }
-    status = progressive_bkz_reduction(&b, stages, o.float_type, o.precision);
   }
   else
     status = bkz_reduction(&b, strchr(format, 'u') ? &u : NULL, param, o.float_type, o.precision);
@@ -737,6 +751,20 @@ void read_options(int argc, char **argv, Options &o)
     {
       ++ac;
       CHECK(ac < argc, "missing comma-separated schedule after '-bkzprogressive'");
+      const string argument(argv[ac]);
+      if (argument == "auto" || argument.compare(0, 5, "auto:") == 0)
+      {
+        CHECK(o.bkz_progressive_stages.empty(), "multiple '-bkzprogressive' options");
+        char *end = nullptr;
+        const long start = argument == "auto" ? 10 : strtol(argument.c_str() + 5, &end, 10);
+        CHECK(argument == "auto" || (*end == '\0' && start <= INT_MAX),
+              "invalid automatic progressive BKZ start block size");
+        CHECK(start >= 2,
+              "automatic progressive BKZ must start at block size 2 or later");
+        o.bkz_progressive_auto_start = static_cast<int>(start);
+        continue;
+      }
+      CHECK(o.bkz_progressive_auto_start == 0, "multiple '-bkzprogressive' options");
       stringstream schedule(argv[ac]);
       string item;
       while (getline(schedule, item, ','))
@@ -967,8 +995,8 @@ void read_options(int argc, char **argv, Options &o)
            << "       Size of BKZ blocks\n"
            << "  -bkzmaxloops <loops>\n"
            << "       Maximum number of full loop iterations\n"
-           << "  -bkzprogressive <b1,b2,...,bn>\n"
-           << "       Run progressive BKZ with a strictly increasing block-size schedule\n"
+           << "  -bkzprogressive <b1,b2,...,bn|auto[:start]>\n"
+           << "       Run explicit stages, or advance automatically using paper FEC thresholds\n"
            << "  -bkzmaxtime <time>\n"
            << "        Stops after <time> seconds\n"
            << "  -bkzautoabort\n"

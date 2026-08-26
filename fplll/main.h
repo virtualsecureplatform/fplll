@@ -59,6 +59,7 @@ struct Options
     bkz_max_time  = 0;
     bkz_max_tour_rows = 0;
     bkz_tour_step = 1;
+    bkz_progressive_auto_start = 0;
   }
   Action action;
   LLLMethod method;
@@ -82,6 +83,7 @@ struct Options
   int bkz_max_tour_rows;
   int bkz_tour_step;
   vector<int> bkz_progressive_stages;
+  int bkz_progressive_auto_start;
   string bkz_dump_gso_filename;
   double bkz_gh_factor;
   string bkz_strategy_file;

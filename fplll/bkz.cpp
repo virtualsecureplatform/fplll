@@ -19,6 +19,7 @@
 
 #include "bkz.h"
 #include "bkz_param.h"
+#include "pbkz_simulator.h"
 #include "enum/enumerate.h"
 #include "util.h"
 #include "wrapper.h"
@@ -1274,6 +1275,97 @@ int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
         status == RED_BKZ_TIME_LIMIT && (stage.flags & BKZ_MAX_TIME);
     if (status != RED_SUCCESS && !expected_loop_limit && !expected_time_limit)
       return status;
+  }
+  return RED_SUCCESS;
+}
+
+template <class FT> static long double basis_log_fec(ZZ_mat<mpz_t> &basis)
+{
+  ZZ_mat<mpz_t> empty_u, empty_u_inv;
+  MatGSO<Z_NR<mpz_t>, FT> gso(basis, empty_u, empty_u_inv, GSO_DEFAULT);
+  gso.discover_all_rows();
+  FPLLL_CHECK(gso.update_gso(), "GSO failure while measuring progressive BKZ FEC");
+  vector<long double> logs(basis.get_rows());
+  FT diagonal, log_diagonal;
+  long exponent;
+  for (int i = 0; i < basis.get_rows(); ++i)
+  {
+    diagonal = gso.get_r_exp(i, i, exponent);
+    log_diagonal.log(diagonal);
+    logs[i] = 0.5L * (static_cast<long double>(log_diagonal.get_d()) +
+                      exponent * logl(2.0L));
+  }
+  return pbkz_log_fec(logs);
+}
+
+static long double basis_log_fec(ZZ_mat<mpz_t> &basis, FloatType type, int precision)
+{
+  const FloatType selected = type == FT_DEFAULT ? FT_DOUBLE : type;
+  if (selected == FT_DOUBLE)
+    return basis_log_fec<FP_NR<double>>(basis);
+#ifdef FPLLL_WITH_LONG_DOUBLE
+  if (selected == FT_LONG_DOUBLE)
+    return basis_log_fec<FP_NR<long double>>(basis);
+#endif
+#ifdef FPLLL_WITH_DPE
+  if (selected == FT_DPE)
+    return basis_log_fec<FP_NR<dpe_t>>(basis);
+#endif
+#ifdef FPLLL_WITH_QD
+  if (selected == FT_DD)
+    return basis_log_fec<FP_NR<dd_real>>(basis);
+  if (selected == FT_QD)
+    return basis_log_fec<FP_NR<qd_real>>(basis);
+#endif
+  if (selected == FT_MPFR)
+  {
+    FPLLL_CHECK(precision > 0, "Missing precision for progressive BKZ with mpfr");
+    const int old_precision  = FP_NR<mpfr_t>::set_prec(precision);
+    const long double result = basis_log_fec<FP_NR<mpfr_t>>(basis);
+    FP_NR<mpfr_t>::set_prec(old_precision);
+    return result;
+  }
+  FPLLL_ABORT("Unsupported floating point type for progressive BKZ");
+}
+
+int adaptive_progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const BKZParam &param,
+                                       int start_block_size, FloatType float_type, int precision)
+{
+  FPLLL_CHECK(B, "B == NULL in adaptive progressive BKZ");
+  FPLLL_CHECK(start_block_size >= 2 && start_block_size <= param.block_size,
+              "invalid progressive BKZ block-size interval");
+  FPLLL_CHECK(param.block_size <= B->get_rows(), "BKZ block size exceeds basis dimension");
+
+  if (!(param.flags & BKZ_NO_LLL))
+  {
+    const int status = lll_reduction(*B, param.delta);
+    if (status != RED_SUCCESS)
+      return status;
+  }
+
+  const int tours_per_stage = (param.flags & BKZ_MAX_LOOPS) ? param.max_loops : 0;
+  for (int goal_beta = start_block_size; goal_beta <= param.block_size; ++goal_beta)
+  {
+    const long double target = pbkz_simulated_log_fec(B->get_rows(), goal_beta);
+    int tours                = 0;
+    long double current      = basis_log_fec(*B, float_type, precision);
+    while (current > target)
+    {
+      if (tours_per_stage > 0 && tours >= tours_per_stage)
+        return RED_BKZ_LOOPS_LIMIT;
+      BKZParam tour(param);
+      tour.block_size = goal_beta;
+      tour.flags |= BKZ_NO_LLL | BKZ_MAX_LOOPS;
+      tour.max_loops = 1;
+      const int status = bkz_reduction(B, NULL, tour, float_type, precision);
+      if (status != RED_SUCCESS && status != RED_BKZ_LOOPS_LIMIT)
+        return status;
+      ++tours;
+      current = basis_log_fec(*B, float_type, precision);
+    }
+    if (param.flags & BKZ_VERBOSE)
+      cerr << "Progressive BKZ reached beta " << goal_beta << " after " << tours
+           << " tour(s), log(FEC)=" << static_cast<double>(current) << endl;
   }
   return RED_SUCCESS;
 }
