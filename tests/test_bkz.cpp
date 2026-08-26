@@ -414,6 +414,28 @@ int test_local_postprocessing()
   return gso.update_gso() ? 0 : 1;
 }
 
+int test_local_block_lll()
+{
+  ZZ_mat<mpz_t> input(2, 2), reduced, transform, expected(2, 2);
+  input(0, 0) = 4;
+  input(0, 1) = 1;
+  input(1, 0) = 1;
+  input(1, 1) = 0;
+  if (local_block_lll(input, reduced, transform, LLL_DEF_DELTA, LLL_DEF_ETA, FT_DOUBLE, 0) !=
+      RED_SUCCESS)
+    return 1;
+  expected.gen_zero(2, 2);
+  for (int i = 0; i < 2; ++i)
+    for (int j = 0; j < 2; ++j)
+      for (int k = 0; k < 2; ++k)
+        expected(i, j).addmul(transform(i, k), input(k, j));
+  for (int i = 0; i < 2; ++i)
+    for (int j = 0; j < 2; ++j)
+      if (expected(i, j) != reduced(i, j))
+        return 1;
+  return 0;
+}
+
 int main(int /*argc*/, char ** /*argv*/)
 {
 
@@ -424,6 +446,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
   status |= test_local_block_transform();
+  status |= test_local_block_lll();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD

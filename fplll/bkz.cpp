@@ -1252,6 +1252,17 @@ int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
   return RED_SUCCESS;
 }
 
+int local_block_lll(const ZZ_mat<mpz_t> &input_block, ZZ_mat<mpz_t> &reduced_block,
+                    ZZ_mat<mpz_t> &transform, double delta, double eta, FloatType float_type,
+                    int precision)
+{
+  FPLLL_CHECK(input_block.get_rows() > 0, "local block must be non-empty");
+  reduced_block = input_block;
+  transform.gen_identity(input_block.get_rows());
+  return lll_reduction(reduced_block, transform, delta, eta, LM_HEURISTIC, float_type, precision,
+                       LLL_DEFAULT);
+}
+
 int bkz_reduction(ZZ_mat<mpz_t> &b, ZZ_mat<mpz_t> &u, int block_size, int flags,
                   FloatType float_type, int precision)
 {

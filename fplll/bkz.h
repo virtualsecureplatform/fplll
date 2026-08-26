@@ -540,6 +540,18 @@ int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
                               FloatType float_type = FT_DEFAULT, int precision = 0);
 
 /**
+ * @brief LLL-reduce an isolated block and return its unimodular row transform.
+ *
+ * `transform` satisfies `reduced_block = transform * input_block`.  This is
+ * the transform-producing half of local basis processing; callers can lift it
+ * into a parent mpz GSO with LocalBlockTransform::apply_exact().
+ */
+int local_block_lll(const ZZ_mat<mpz_t> &input_block, ZZ_mat<mpz_t> &reduced_block,
+                    ZZ_mat<mpz_t> &transform, double delta = LLL_DEF_DELTA,
+                    double eta = LLL_DEF_ETA, FloatType float_type = FT_DEFAULT,
+                    int precision = 0);
+
+/**
  * @brief Performs block reduction without transformation matrix.
  *
  * Creates a parameter object corresponding to the parameters and calls bkz_reduction
