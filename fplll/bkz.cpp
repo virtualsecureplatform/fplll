@@ -224,6 +224,21 @@ bool BKZReduction<ZT, FT>::svp_postprocessing(int kappa, int block_size, const v
 }
 
 template <class ZT, class FT>
+bool BKZReduction<ZT, FT>::local_postprocessing(int kappa, int block_size,
+                                                const LocalBlockTransform &transform)
+{
+  FPLLL_CHECK(transform.dimension() == block_size,
+              "local transform dimension does not match the BKZ block");
+  if (transform.empty())
+    return true;
+
+  transform.apply(m, kappa);
+  if (!lll_obj.size_reduction(0, kappa + block_size, 0))
+    throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+  return false;
+}
+
+template <class ZT, class FT>
 bool BKZReduction<ZT, FT>::svp_postprocessing_generic(int kappa, int block_size,
                                                       const vector<FT> &solution, bool dual)
 {

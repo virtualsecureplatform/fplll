@@ -59,6 +59,7 @@ public:
   }
 
   int dimension() const { return transform.get_rows(); }
+  bool empty() const { return operations.empty(); }
   const ZZ_mat<mpz_t> &matrix() const { return transform; }
 
   void row_swap(int first, int second)
@@ -242,6 +243,14 @@ public:
    *    false if it made progress, true otherwise
    */
   bool svp_postprocessing(int kappa, int block_size, const vector<FT> &solution, bool dual = false);
+
+  /**
+   * Lift a completed local-basis transformation into the parent basis and
+   * restore size reduction.  This is the postprocessing counterpart for
+   * local basis processing; it is intentionally separate from single-vector
+   * SVP insertion.
+   */
+  bool local_postprocessing(int kappa, int block_size, const LocalBlockTransform &transform);
 
   /**
    * @brief (d)SVP-reduce a block.
