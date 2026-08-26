@@ -81,6 +81,7 @@ struct Options
   double bkz_max_time;
   int bkz_max_tour_rows;
   int bkz_tour_step;
+  vector<int> bkz_progressive_stages;
   string bkz_dump_gso_filename;
   double bkz_gh_factor;
   string bkz_strategy_file;

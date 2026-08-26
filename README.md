@@ -270,6 +270,7 @@ Options for BKZ-reduction:
 * `-p precision` :             precision of the floating-point arithmetic with `-f mpfr`.
 
 * `-bkzmaxloops loops` :       maximum number of full loop iterations.
+* `-bkzprogressive b1,b2,...,bn` : runs the listed strictly increasing BKZ block sizes in sequence. A configured loop or time limit terminates the current stage and advances to the next one. `-b`, when also present, must equal `bn`.
 * `-bkzmaxtime time` :         stops after `time` seconds (up to completion of the current loop iteration).
 * `-bkzmaxrows rows` :         limits every primal BKZ tour to the first `rows` basis vectors. This is intended for truncated final tours and deliberately leaves the remaining tail unreduced.
 * `-bkzjump step` :            visits every `step`-th primal BKZ block. Values above one are heuristic jumping tours and do not produce a fully BKZ-reduced basis.
@@ -281,6 +282,19 @@ Without any of the last three options, BKZ runs until no block has been updated 
 
 * `-bkzghbound factor` :       multiplies the Gaussian heuristic by `factor` (of float type) to set the enumeration radius of the SVP calls.
 * `-bkzboundedlll` :         confines LLL and recursive preprocessing to the current block. In the C++ API, bounded `BKZReduction::svp_preprocessing` can optionally return the exact local unimodular `RowTransform`; the transform is already applied to the parent GSO and should only be replayed on a detached basis.
+
+For example, preprocess an instance with PotLLL at 256-bit MPFR precision and
+then run one tour at each stage of a progressive BKZ schedule:
+
+```sh
+fplll -a potlll -f mpfr -p 256 -of b input.txt > potlll-256.txt
+fplll -a bkz -bkzprogressive 40,45,50,55,60,65,70,74 \
+  -bkzmaxloops 1 -bkzboundedlll -f mpfr -p 256 \
+  -s strategies/default.json -of b potlll-256.txt > progressive-74.txt
+```
+
+The PotLLL step is deliberately separate: `-a potlllbkz` would instead use
+PotLLL during every BKZ block's preprocessing and is a different algorithm.
 
 * `-bkzdumpgso file_name` :     dumps the log ||b_i*|| 's in specified file.
 

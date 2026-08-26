@@ -1268,7 +1268,11 @@ int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
   for (const BKZParam &stage : stages)
   {
     const int status = bkz_reduction(B, NULL, stage, float_type, precision);
-    if (status != RED_SUCCESS)
+    const bool expected_loop_limit =
+        status == RED_BKZ_LOOPS_LIMIT && (stage.flags & BKZ_MAX_LOOPS);
+    const bool expected_time_limit =
+        status == RED_BKZ_TIME_LIMIT && (stage.flags & BKZ_MAX_TIME);
+    if (status != RED_SUCCESS && !expected_loop_limit && !expected_time_limit)
       return status;
   }
   return RED_SUCCESS;

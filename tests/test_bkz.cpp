@@ -354,13 +354,15 @@ int test_progressive_bkz()
     return 1;
 
   vector<Strategy> strategies;
+  for (int block = 0; block <= 5; ++block)
+    strategies.emplace_back(Strategy::EmptyStrategy(block));
   BKZParam small(3, strategies);
   BKZParam large(5, strategies);
   small.flags = large.flags = BKZ_MAX_LOOPS;
   small.max_loops = large.max_loops = 1;
   vector<BKZParam> stages{small, large};
   const int status = progressive_bkz_reduction(&A, stages, FT_DOUBLE, 0);
-  return (status == RED_SUCCESS || status == RED_BKZ_LOOPS_LIMIT) ? 0 : 1;
+  return status == RED_SUCCESS ? 0 : 1;
 }
 
 int test_scoped_row_transform()

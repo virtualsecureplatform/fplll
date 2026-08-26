@@ -255,24 +255,10 @@ void read_pruning_vector(const char *file_name, PruningParams &pr, int n)
 
 template <class ZT> int bkz(Options &, ZZ_mat<ZT> &) { ABORT_MSG("mpz required for BKZ"); }
 
-template <> int bkz(Options &o, ZZ_mat<mpz_t> &b)
+static void configure_bkz_param(BKZParam &param, const Options &o)
 {
-  CHECK(o.block_size > 0, "Option -b is missing");
-  vector<Strategy> strategies;
-  if (!o.bkz_strategy_file.empty())
-  {
-    strategies = load_strategies_json(strategy_full_path(o.bkz_strategy_file));
-  }
-
-  BKZParam param(o.block_size, strategies);
-  // Stupid initialization of u to be not empty.
-  ZZ_mat<mpz_t> u(1, 1);
-  const char *format = o.output_format ? o.output_format : "b";
-  int status;
-
   param.delta = o.delta;
   param.flags = o.bkz_flags;
-
   if (o.bkz_flags & BKZ_DUMP_GSO)
     param.dump_gso_filename = o.bkz_dump_gso_filename;
   if (o.bkz_flags & BKZ_GH_BND)
@@ -282,13 +268,57 @@ template <> int bkz(Options &o, ZZ_mat<mpz_t> &b)
   if (o.bkz_flags & BKZ_MAX_TIME)
     param.max_time = o.bkz_max_time;
   param.max_tour_rows = o.bkz_max_tour_rows;
-  param.tour_step = o.bkz_tour_step;
+  param.tour_step     = o.bkz_tour_step;
   if (o.verbose)
     param.flags |= BKZ_VERBOSE;
   if (o.no_lll)
     param.flags |= BKZ_NO_LLL;
+}
 
-  status = bkz_reduction(&b, strchr(format, 'u') ? &u : NULL, param, o.float_type, o.precision);
+template <> int bkz(Options &o, ZZ_mat<mpz_t> &b)
+{
+  const bool progressive = !o.bkz_progressive_stages.empty();
+  if (progressive)
+  {
+    CHECK(o.block_size == 0 || o.block_size == o.bkz_progressive_stages.back(),
+          "-b must equal the final -bkzprogressive stage");
+    o.block_size = o.bkz_progressive_stages.back();
+  }
+  CHECK(o.block_size > 0, "Option -b or -bkzprogressive is missing");
+  CHECK(o.block_size <= b.get_rows(), "BKZ block size exceeds the basis dimension");
+  vector<Strategy> strategies;
+  if (!o.bkz_strategy_file.empty())
+  {
+    strategies = load_strategies_json(strategy_full_path(o.bkz_strategy_file));
+  }
+
+  if (progressive && strategies.empty())
+    for (int block = 0; block <= o.block_size; ++block)
+      strategies.emplace_back(Strategy::EmptyStrategy(block));
+
+  BKZParam param(o.block_size, strategies);
+  // Stupid initialization of u to be not empty.
+  ZZ_mat<mpz_t> u(1, 1);
+  const char *format = o.output_format ? o.output_format : "b";
+  int status;
+
+  configure_bkz_param(param, o);
+
+  if (progressive)
+  {
+    CHECK(strchr(format, 'u') == NULL,
+          "transformation output is not supported by progressive BKZ");
+    vector<BKZParam> stages;
+    stages.reserve(o.bkz_progressive_stages.size());
+    for (int block_size : o.bkz_progressive_stages)
+    {
+      stages.emplace_back(block_size, strategies);
+      configure_bkz_param(stages.back(), o);
+    }
+    status = progressive_bkz_reduction(&b, stages, o.float_type, o.precision);
+  }
+  else
+    status = bkz_reduction(&b, strchr(format, 'u') ? &u : NULL, param, o.float_type, o.precision);
 
   for (int i = 0; format[i]; i++)
   {
@@ -703,6 +733,26 @@ void read_options(int argc, char **argv, Options &o)
     {
       o.bkz_flags |= BKZ_BOUNDED_LLL;
     }
+    else if (strcmp(argv[ac], "-bkzprogressive") == 0)
+    {
+      ++ac;
+      CHECK(ac < argc, "missing comma-separated schedule after '-bkzprogressive'");
+      stringstream schedule(argv[ac]);
+      string item;
+      while (getline(schedule, item, ','))
+      {
+        CHECK(!item.empty(), "empty block size in '-bkzprogressive' schedule");
+        char *end = nullptr;
+        const long block_size = strtol(item.c_str(), &end, 10);
+        CHECK(*end == '\0' && block_size >= 2 && block_size <= INT_MAX,
+              "invalid block size in '-bkzprogressive' schedule");
+        CHECK(o.bkz_progressive_stages.empty() ||
+                  block_size > o.bkz_progressive_stages.back(),
+              "'-bkzprogressive' stages must be strictly increasing");
+        o.bkz_progressive_stages.push_back(static_cast<int>(block_size));
+      }
+      CHECK(!o.bkz_progressive_stages.empty(), "'-bkzprogressive' schedule is empty");
+    }
     else if (strcmp(argv[ac], "-bkzmaxloops") == 0)
     {
       ++ac;
@@ -917,6 +967,8 @@ void read_options(int argc, char **argv, Options &o)
            << "       Size of BKZ blocks\n"
            << "  -bkzmaxloops <loops>\n"
            << "       Maximum number of full loop iterations\n"
+           << "  -bkzprogressive <b1,b2,...,bn>\n"
+           << "       Run progressive BKZ with a strictly increasing block-size schedule\n"
            << "  -bkzmaxtime <time>\n"
            << "        Stops after <time> seconds\n"
            << "  -bkzautoabort\n"
