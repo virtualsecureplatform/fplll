@@ -25,6 +25,109 @@
 
 FPLLL_BEGIN_NAMESPACE
 
+/** Elementary row operation recorded while processing one BKZ block. */
+struct LocalBlockOperation
+{
+  enum Type
+  {
+    SWAP,
+    NEGATE,
+    ADDMUL
+  };
+
+  Type type;
+  int first;
+  int second;
+  long coefficient;
+};
+
+/**
+ * A replayable unimodular transformation on a contiguous BKZ block.
+ *
+ * Local processing records its elementary row operations here.  Replaying the
+ * journal on the parent GSO applies exactly the same transformation to the
+ * corresponding global basis rows, without having to recover a transform from
+ * two integer bases after the fact.
+ */
+class LocalBlockTransform
+{
+public:
+  explicit LocalBlockTransform(int dimension) : transform(dimension, dimension)
+  {
+    FPLLL_CHECK(dimension >= 0, "local block dimension must be non-negative");
+    transform.gen_identity(dimension);
+  }
+
+  int dimension() const { return transform.get_rows(); }
+  const ZZ_mat<mpz_t> &matrix() const { return transform; }
+
+  void row_swap(int first, int second)
+  {
+    check_index(first);
+    check_index(second);
+    if (first == second)
+      return;
+    transform.swap_rows(first, second);
+    operations.push_back({LocalBlockOperation::SWAP, first, second, 0});
+  }
+
+  void negate_row(int row)
+  {
+    check_index(row);
+    for (int col = 0; col < dimension(); ++col)
+      transform(row, col).neg(transform(row, col));
+    operations.push_back({LocalBlockOperation::NEGATE, row, 0, 0});
+  }
+
+  void row_addmul_si(int destination, int source, long coefficient)
+  {
+    check_index(destination);
+    check_index(source);
+    if (coefficient == 0)
+      return;
+    transform[destination].addmul_si(transform[source], coefficient);
+    operations.push_back({LocalBlockOperation::ADDMUL, destination, source, coefficient});
+  }
+
+  template <class ZT, class FT> void apply(MatGSOInterface<ZT, FT> &gso, int offset) const
+  {
+    FPLLL_CHECK(offset >= 0 && offset + dimension() <= gso.get_rows_of_b(),
+                "local block is outside the basis");
+    gso.row_op_begin(offset, offset + dimension());
+    for (const LocalBlockOperation &operation : operations)
+    {
+      const int first = offset + operation.first;
+      const int second = offset + operation.second;
+      switch (operation.type)
+      {
+      case LocalBlockOperation::SWAP:
+        gso.row_swap(min(first, second), max(first, second));
+        break;
+      case LocalBlockOperation::NEGATE:
+        gso.negate_row_of_b(first);
+        break;
+      case LocalBlockOperation::ADDMUL:
+      {
+        FT coefficient;
+        coefficient = static_cast<double>(operation.coefficient);
+        gso.row_addmul(first, second, coefficient);
+        break;
+      }
+      }
+    }
+    gso.row_op_end(offset, offset + dimension());
+  }
+
+private:
+  void check_index(int index) const
+  {
+    FPLLL_CHECK(index >= 0 && index < dimension(), "local transform index out of range");
+  }
+
+  ZZ_mat<mpz_t> transform;
+  vector<LocalBlockOperation> operations;
+};
+
 /**
  * @brief Performs a heuristic check if BKZ can be terminated.
  *

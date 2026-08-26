@@ -363,6 +363,37 @@ int test_progressive_bkz()
   return (status == RED_SUCCESS || status == RED_BKZ_LOOPS_LIMIT) ? 0 : 1;
 }
 
+int test_local_block_transform()
+{
+  ZZ_mat<mpz_t> A(4, 4), U, UT;
+  A.gen_identity(4);
+  A(1, 0) = 2;
+  A(2, 1) = 3;
+  A(3, 2) = 5;
+  ZZ_mat<mpz_t> expected = A;
+
+  LocalBlockTransform transform(2);
+  transform.row_addmul_si(1, 0, 2);
+  transform.negate_row(0);
+  transform.row_swap(0, 1);
+
+  expected[2].addmul_si(expected[1], 2);
+  for (int j = 0; j < expected.get_cols(); ++j)
+    expected(1, j).neg(expected(1, j));
+  expected.swap_rows(1, 2);
+
+  MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(A, U, UT, GSO_DEFAULT);
+  gso.discover_all_rows();
+  transform.apply(gso, 1);
+  if (transform.matrix().get_rows() != 2)
+    return 1;
+  for (int i = 0; i < A.get_rows(); ++i)
+    for (int j = 0; j < A.get_cols(); ++j)
+      if (A(i, j) != expected(i, j))
+        return 1;
+  return gso.update_gso() ? 0 : 1;
+}
+
 int main(int /*argc*/, char ** /*argv*/)
 {
 
@@ -372,6 +403,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_jump();
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
+  status |= test_local_block_transform();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD
