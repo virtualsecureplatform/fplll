@@ -436,6 +436,28 @@ int test_local_block_lll()
   return 0;
 }
 
+int test_local_block_process()
+{
+  ZZ_mat<mpz_t> basis(3, 3), original, transform;
+  basis.gen_identity(3);
+  basis(1, 0) = 5;
+  basis(2, 1) = 2;
+  original = basis;
+  if (local_block_process(basis, 1, 2, transform, LLL_DEF_DELTA, LLL_DEF_ETA, FT_DOUBLE, 0) !=
+      RED_SUCCESS)
+    return 1;
+  for (int j = 0; j < 3; ++j)
+    if (basis(0, j) != original(0, j))
+      return 1;
+  ZZ_mat<mpz_t> expected = original;
+  apply_local_block_transform(expected, 1, transform);
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      if (basis(i, j) != expected(i, j))
+        return 1;
+  return 0;
+}
+
 int main(int /*argc*/, char ** /*argv*/)
 {
 
@@ -447,6 +469,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_progressive_bkz();
   status |= test_local_block_transform();
   status |= test_local_block_lll();
+  status |= test_local_block_process();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD

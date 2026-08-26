@@ -1263,6 +1263,44 @@ int local_block_lll(const ZZ_mat<mpz_t> &input_block, ZZ_mat<mpz_t> &reduced_blo
                        LLL_DEFAULT);
 }
 
+void apply_local_block_transform(ZZ_mat<mpz_t> &basis, int first,
+                                 const ZZ_mat<mpz_t> &transform)
+{
+  const int block_size = transform.get_rows();
+  FPLLL_CHECK(block_size == transform.get_cols(), "local transform must be square");
+  FPLLL_CHECK(first >= 0 && first + block_size <= basis.get_rows(),
+              "local transform is outside the basis");
+  ZZ_mat<mpz_t> original(block_size, basis.get_cols());
+  for (int i = 0; i < block_size; ++i)
+    for (int j = 0; j < basis.get_cols(); ++j)
+      original(i, j) = basis(first + i, j);
+
+  for (int i = 0; i < block_size; ++i)
+    for (int j = 0; j < basis.get_cols(); ++j)
+    {
+      basis(first + i, j) = 0;
+      for (int k = 0; k < block_size; ++k)
+        basis(first + i, j).addmul(transform(i, k), original(k, j));
+    }
+}
+
+int local_block_process(ZZ_mat<mpz_t> &basis, int first, int block_size,
+                        ZZ_mat<mpz_t> &transform, double delta, double eta,
+                        FloatType float_type, int precision)
+{
+  FPLLL_CHECK(first >= 0 && block_size > 0 && first + block_size <= basis.get_rows(),
+              "local block is outside the basis");
+  ZZ_mat<mpz_t> input_block(block_size, basis.get_cols()), reduced_block;
+  for (int i = 0; i < block_size; ++i)
+    for (int j = 0; j < basis.get_cols(); ++j)
+      input_block(i, j) = basis(first + i, j);
+  const int status =
+      local_block_lll(input_block, reduced_block, transform, delta, eta, float_type, precision);
+  if (status == RED_SUCCESS)
+    apply_local_block_transform(basis, first, transform);
+  return status;
+}
+
 int bkz_reduction(ZZ_mat<mpz_t> &b, ZZ_mat<mpz_t> &u, int block_size, int flags,
                   FloatType float_type, int precision)
 {

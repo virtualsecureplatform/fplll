@@ -551,6 +551,16 @@ int local_block_lll(const ZZ_mat<mpz_t> &input_block, ZZ_mat<mpz_t> &reduced_blo
                     double eta = LLL_DEF_ETA, FloatType float_type = FT_DEFAULT,
                     int precision = 0);
 
+/** Apply an exact square row transform to a contiguous block of an integer basis. */
+void apply_local_block_transform(ZZ_mat<mpz_t> &basis, int first,
+                                 const ZZ_mat<mpz_t> &transform);
+
+/** LLL-process a contiguous block in place and return the transform used. */
+int local_block_process(ZZ_mat<mpz_t> &basis, int first, int block_size,
+                        ZZ_mat<mpz_t> &transform, double delta = LLL_DEF_DELTA,
+                        double eta = LLL_DEF_ETA, FloatType float_type = FT_DEFAULT,
+                        int precision = 0);
+
 /**
  * @brief Performs block reduction without transformation matrix.
  *
