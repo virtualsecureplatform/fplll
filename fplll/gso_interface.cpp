@@ -256,8 +256,7 @@ void MatGSOInterface<ZT, FT>::record_row_swap(int first, int second)
     FPLLL_CHECK(scope.first <= first && first < scope.last && scope.first <= second &&
                     second < scope.last,
                 "row swap escaped the recorded interval");
-    scope.transform->transform.swap_rows(first - scope.first, second - scope.first);
-    ++scope.transform->operation_count;
+    scope.transform->row_swap(first - scope.first, second - scope.first);
   }
 }
 
@@ -269,13 +268,7 @@ void MatGSOInterface<ZT, FT>::record_move_row(int old_row, int new_row)
     FPLLL_CHECK(scope.first <= old_row && old_row < scope.last && scope.first <= new_row &&
                     new_row < scope.last,
                 "row move escaped the recorded interval");
-    const int old_local = old_row - scope.first;
-    const int new_local = new_row - scope.first;
-    if (new_local < old_local)
-      scope.transform->transform.rotate_right(new_local, old_local);
-    else if (old_local < new_local)
-      scope.transform->transform.rotate_left(old_local, new_local);
-    ++scope.transform->operation_count;
+    scope.transform->move_row(old_row - scope.first, new_row - scope.first);
   }
 }
 
@@ -285,12 +278,7 @@ template <class ZT, class FT> void MatGSOInterface<ZT, FT>::record_negate_row(in
   {
     FPLLL_CHECK(scope.first <= row && row < scope.last,
                 "row negation escaped the recorded interval");
-    for (int column = 0; column < scope.transform->dimension(); ++column)
-    {
-      ZT &entry = scope.transform->transform(row - scope.first, column);
-      entry.neg(entry);
-    }
-    ++scope.transform->operation_count;
+    scope.transform->negate_row(row - scope.first);
   }
 }
 
@@ -317,9 +305,8 @@ void MatGSOInterface<ZT, FT>::record_row_addmul_2exp(int destination, int source
     FPLLL_CHECK(scope.first <= destination && destination < scope.last && scope.first <= source &&
                     source < scope.last,
                 "row addition escaped the recorded interval");
-    scope.transform->transform[destination - scope.first].addmul(
-        scope.transform->transform[source - scope.first], exact_coefficient);
-    ++scope.transform->operation_count;
+    scope.transform->row_addmul(destination - scope.first, source - scope.first,
+                                exact_coefficient);
   }
 }
 

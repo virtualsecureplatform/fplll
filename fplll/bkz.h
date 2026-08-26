@@ -25,151 +25,8 @@
 
 FPLLL_BEGIN_NAMESPACE
 
-/** Elementary row operation recorded while processing one BKZ block. */
-struct LocalBlockOperation
-{
-  enum Type
-  {
-    SWAP,
-    MOVE,
-    NEGATE,
-    ADDMUL
-  };
-
-  Type type;
-  int first;
-  int second;
-  Z_NR<mpz_t> coefficient;
-
-  LocalBlockOperation(Type type, int first, int second, long coefficient = 0)
-      : type(type), first(first), second(second)
-  {
-    this->coefficient = coefficient;
-  }
-
-  LocalBlockOperation(Type type, int first, int second, const Z_NR<mpz_t> &coefficient)
-      : type(type), first(first), second(second), coefficient(coefficient)
-  {
-  }
-};
-
-/**
- * A replayable unimodular transformation on a contiguous BKZ block.
- *
- * Local processing records its elementary row operations here.  Replaying the
- * journal on the parent GSO applies exactly the same transformation to the
- * corresponding global basis rows, without having to recover a transform from
- * two integer bases after the fact.
- */
-class LocalBlockTransform
-{
-public:
-  explicit LocalBlockTransform(int dimension) : transform(dimension, dimension)
-  {
-    FPLLL_CHECK(dimension >= 0, "local block dimension must be non-negative");
-    transform.gen_identity(dimension);
-  }
-
-  int dimension() const { return transform.get_rows(); }
-  bool empty() const { return operations.empty(); }
-  const ZZ_mat<mpz_t> &matrix() const { return transform; }
-
-  void row_swap(int first, int second)
-  {
-    check_index(first);
-    check_index(second);
-    if (first == second)
-      return;
-    transform.swap_rows(first, second);
-    operations.push_back({LocalBlockOperation::SWAP, first, second, 0});
-  }
-
-  void move_row(int old_row, int new_row)
-  {
-    check_index(old_row);
-    check_index(new_row);
-    if (old_row == new_row)
-      return;
-    if (new_row < old_row)
-      transform.rotate_right(new_row, old_row);
-    else
-      transform.rotate_left(old_row, new_row);
-    operations.push_back({LocalBlockOperation::MOVE, old_row, new_row, 0});
-  }
-
-  void negate_row(int row)
-  {
-    check_index(row);
-    for (int col = 0; col < dimension(); ++col)
-      transform(row, col).neg(transform(row, col));
-    operations.push_back({LocalBlockOperation::NEGATE, row, 0, 0});
-  }
-
-  void row_addmul_si(int destination, int source, long coefficient)
-  {
-    Z_NR<mpz_t> coefficient_z;
-    coefficient_z = coefficient;
-    row_addmul(destination, source, coefficient_z);
-  }
-
-  void row_addmul(int destination, int source, const Z_NR<mpz_t> &coefficient)
-  {
-    check_index(destination);
-    check_index(source);
-    if (coefficient.is_zero())
-      return;
-    transform[destination].addmul(transform[source], coefficient);
-    operations.push_back({LocalBlockOperation::ADDMUL, destination, source, coefficient});
-  }
-
-  template <class ZT, class FT> void apply(MatGSOInterface<ZT, FT> &gso, int offset) const
-  {
-    FPLLL_CHECK(offset >= 0 && offset + dimension() <= gso.get_rows_of_b(),
-                "local block is outside the basis");
-    for (const LocalBlockOperation &operation : operations)
-    {
-      const int first = offset + operation.first;
-      const int second = offset + operation.second;
-      switch (operation.type)
-      {
-      case LocalBlockOperation::SWAP:
-        gso.row_swap(min(first, second), max(first, second));
-        break;
-      case LocalBlockOperation::MOVE:
-        gso.move_row(first, second);
-        break;
-      case LocalBlockOperation::NEGATE:
-        gso.negate_row_of_b(first);
-        break;
-      case LocalBlockOperation::ADDMUL:
-      {
-        FT coefficient;
-        coefficient.set_z(operation.coefficient);
-        gso.row_op_begin(offset, offset + dimension());
-        gso.row_addmul(first, second, coefficient);
-        gso.row_op_end(offset, offset + dimension());
-        break;
-      }
-      }
-    }
-  }
-
-  template <class FT> void apply_exact(MatGSOInterface<Z_NR<mpz_t>, FT> &gso, int offset) const
-  {
-    FPLLL_CHECK(offset >= 0 && offset + dimension() <= gso.get_rows_of_b(),
-                "local block is outside the basis");
-    gso.apply_integer_transform(transform, offset);
-  }
-
-private:
-  void check_index(int index) const
-  {
-    FPLLL_CHECK(index >= 0 && index < dimension(), "local transform index out of range");
-  }
-
-  ZZ_mat<mpz_t> transform;
-  vector<LocalBlockOperation> operations;
-};
+/** Compatibility name for exact transforms on the standard mpz basis type. */
+using LocalBlockTransform = RowTransform<Z_NR<mpz_t>>;
 
 /**
  * @brief Performs a heuristic check if BKZ can be terminated.
@@ -297,7 +154,7 @@ public:
    * local basis processing; it is intentionally separate from single-vector
    * SVP insertion.
    */
-  bool local_postprocessing(int kappa, int block_size, const LocalBlockTransform &transform);
+  bool local_postprocessing(int kappa, int block_size, const RowTransform<ZT> &transform);
 
   /**
    * @brief (d)SVP-reduce a block.
@@ -543,28 +400,6 @@ int bkz_reduction(ZZ_mat<mpz_t> *B, ZZ_mat<mpz_t> *U, const BKZParam &param,
  */
 int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
                               FloatType float_type = FT_DEFAULT, int precision = 0);
-
-/**
- * @brief LLL-reduce an isolated block and return its unimodular row transform.
- *
- * `transform` satisfies `reduced_block = transform * input_block`.  This is
- * the transform-producing half of local basis processing; callers can lift it
- * into a parent mpz GSO with LocalBlockTransform::apply_exact().
- */
-int local_block_lll(const ZZ_mat<mpz_t> &input_block, ZZ_mat<mpz_t> &reduced_block,
-                    ZZ_mat<mpz_t> &transform, double delta = LLL_DEF_DELTA,
-                    double eta = LLL_DEF_ETA, FloatType float_type = FT_DEFAULT,
-                    int precision = 0);
-
-/** Apply an exact square row transform to a contiguous block of an integer basis. */
-void apply_local_block_transform(ZZ_mat<mpz_t> &basis, int first,
-                                 const ZZ_mat<mpz_t> &transform);
-
-/** LLL-process a contiguous block in place and return the transform used. */
-int local_block_process(ZZ_mat<mpz_t> &basis, int first, int block_size,
-                        ZZ_mat<mpz_t> &transform, double delta = LLL_DEF_DELTA,
-                        double eta = LLL_DEF_ETA, FloatType float_type = FT_DEFAULT,
-                        int precision = 0);
 
 /**
  * @brief Performs block reduction without transformation matrix.

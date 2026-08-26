@@ -71,6 +71,54 @@ public:
   bool empty() const { return operation_count == 0; }
   const Matrix<ZT> &matrix() const { return transform; }
 
+  void row_swap(int first, int second)
+  {
+    check_index(first);
+    check_index(second);
+    if (first == second)
+      return;
+    transform.swap_rows(first, second);
+    ++operation_count;
+  }
+
+  void move_row(int old_row, int new_row)
+  {
+    check_index(old_row);
+    check_index(new_row);
+    if (old_row == new_row)
+      return;
+    if (new_row < old_row)
+      transform.rotate_right(new_row, old_row);
+    else
+      transform.rotate_left(old_row, new_row);
+    ++operation_count;
+  }
+
+  void negate_row(int row)
+  {
+    check_index(row);
+    for (int column = 0; column < dimension(); ++column)
+      transform(row, column).neg(transform(row, column));
+    ++operation_count;
+  }
+
+  void row_addmul(int destination, int source, const ZT &coefficient)
+  {
+    check_index(destination);
+    check_index(source);
+    if (coefficient.is_zero())
+      return;
+    transform[destination].addmul(transform[source], coefficient);
+    ++operation_count;
+  }
+
+  void row_addmul_si(int destination, int source, long coefficient)
+  {
+    ZT exact_coefficient;
+    exact_coefficient = coefficient;
+    row_addmul(destination, source, exact_coefficient);
+  }
+
 private:
   template <class, class> friend class MatGSOInterface;
 
@@ -79,6 +127,11 @@ private:
     transform.fill(0);
     for (int index = 0; index < transform.get_rows(); ++index)
       transform(index, index) = 1;
+  }
+
+  void check_index(int index) const
+  {
+    FPLLL_CHECK(0 <= index && index < dimension(), "row transform index out of range");
   }
 
   Matrix<ZT> transform;
