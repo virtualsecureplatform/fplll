@@ -39,7 +39,18 @@ struct LocalBlockOperation
   Type type;
   int first;
   int second;
-  long coefficient;
+  Z_NR<mpz_t> coefficient;
+
+  LocalBlockOperation(Type type, int first, int second, long coefficient = 0)
+      : type(type), first(first), second(second)
+  {
+    this->coefficient = coefficient;
+  }
+
+  LocalBlockOperation(Type type, int first, int second, const Z_NR<mpz_t> &coefficient)
+      : type(type), first(first), second(second), coefficient(coefficient)
+  {
+  }
 };
 
 /**
@@ -96,11 +107,18 @@ public:
 
   void row_addmul_si(int destination, int source, long coefficient)
   {
+    Z_NR<mpz_t> coefficient_z;
+    coefficient_z = coefficient;
+    row_addmul(destination, source, coefficient_z);
+  }
+
+  void row_addmul(int destination, int source, const Z_NR<mpz_t> &coefficient)
+  {
     check_index(destination);
     check_index(source);
-    if (coefficient == 0)
+    if (coefficient.is_zero())
       return;
-    transform[destination].addmul_si(transform[source], coefficient);
+    transform[destination].addmul(transform[source], coefficient);
     operations.push_back({LocalBlockOperation::ADDMUL, destination, source, coefficient});
   }
 
@@ -108,7 +126,6 @@ public:
   {
     FPLLL_CHECK(offset >= 0 && offset + dimension() <= gso.get_rows_of_b(),
                 "local block is outside the basis");
-    gso.row_op_begin(offset, offset + dimension());
     for (const LocalBlockOperation &operation : operations)
     {
       const int first = offset + operation.first;
@@ -127,13 +144,14 @@ public:
       case LocalBlockOperation::ADDMUL:
       {
         FT coefficient;
-        coefficient = static_cast<double>(operation.coefficient);
+        coefficient.set_z(operation.coefficient);
+        gso.row_op_begin(offset, offset + dimension());
         gso.row_addmul(first, second, coefficient);
+        gso.row_op_end(offset, offset + dimension());
         break;
       }
       }
     }
-    gso.row_op_end(offset, offset + dimension());
   }
 
 private:

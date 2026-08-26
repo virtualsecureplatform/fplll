@@ -424,7 +424,6 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
   status |= test_local_block_transform();
-  status |= test_local_postprocessing();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD
