@@ -281,6 +281,7 @@ template <> int bkz(Options &o, ZZ_mat<mpz_t> &b)
     param.max_loops = o.bkz_max_loops;
   if (o.bkz_flags & BKZ_MAX_TIME)
     param.max_time = o.bkz_max_time;
+  param.max_tour_rows = o.bkz_max_tour_rows;
   if (o.verbose)
     param.flags |= BKZ_VERBOSE;
   if (o.no_lll)
@@ -714,6 +715,12 @@ void read_options(int argc, char **argv, Options &o)
       CHECK(ac < argc, "missing value after '-bkzmaxtime'");
       o.bkz_max_time = atof(argv[ac]);
       o.bkz_flags |= BKZ_MAX_TIME;
+    }
+    else if (strcmp(argv[ac], "-bkzmaxrows") == 0)
+    {
+      ++ac;
+      CHECK(ac < argc, "missing value after '-bkzmaxrows'");
+      o.bkz_max_tour_rows = atoi(argv[ac]);
     }
     else if (strcmp(argv[ac], "-bkzautoabort") == 0)
     {

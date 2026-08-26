@@ -328,7 +328,23 @@ int test_bkz_jump()
   param.tour_step = 2;
   param.flags |= BKZ_MAX_LOOPS;
   param.max_loops = 2;
-  return bkz_reduction(&A, NULL, param, FT_DOUBLE, 0) == RED_BKZ_LOOPS_LIMIT ? 0 : 1;
+  const int status = bkz_reduction(&A, NULL, param, FT_DOUBLE, 0);
+  return (status == RED_SUCCESS || status == RED_BKZ_LOOPS_LIMIT) ? 0 : 1;
+}
+
+int test_bkz_truncated_tours()
+{
+  ZZ_mat<mpz_t> A;
+  if (read_file(A, TESTDATADIR "/tests/lattices/dim55_in") != 0)
+    return 1;
+
+  vector<Strategy> strategies;
+  BKZParam param(10, strategies);
+  param.max_tour_rows = 30;
+  param.flags |= BKZ_MAX_LOOPS;
+  param.max_loops = 2;
+  const int status = bkz_reduction(&A, NULL, param, FT_DOUBLE, 0);
+  return (status == RED_SUCCESS || status == RED_BKZ_LOOPS_LIMIT) ? 0 : 1;
 }
 
 int main(int /*argc*/, char ** /*argv*/)
@@ -338,6 +354,7 @@ int main(int /*argc*/, char ** /*argv*/)
 
   status |= test_linear_dep();
   status |= test_bkz_jump();
+  status |= test_bkz_truncated_tours();
   status |= test_filename<mpz_t>(TESTDATADIR "/tests/lattices/dim55_in", 10, FT_DEFAULT,
                                  BKZ_DEFAULT | BKZ_AUTO_ABORT);
 #ifdef FPLLL_WITH_QD

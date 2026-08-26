@@ -271,6 +271,7 @@ Options for BKZ-reduction:
 
 * `-bkzmaxloops loops` :       maximum number of full loop iterations.
 * `-bkzmaxtime time` :         stops after `time` seconds (up to completion of the current loop iteration).
+* `-bkzmaxrows rows` :         limits every primal BKZ tour to the first `rows` basis vectors. This is intended for truncated final tours and deliberately leaves the remaining tail unreduced.
 * `-bkzautoabort` :            stops when the average slope of the log ||b_i*||'s does not decrease fast enough.
 
 Without any of the last three options, BKZ runs until no block has been updated for a full loop iteration.

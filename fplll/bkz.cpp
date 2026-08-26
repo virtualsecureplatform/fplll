@@ -779,6 +779,11 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
     throw std::runtime_error(
         "PotLLLBKZ cannot be combined with PotBKZ, DeepBKZ, SD-BKZ, or slide reduction");
   }
+  if (param.max_tour_rows && (sd || sld || pot))
+  {
+    throw std::runtime_error(
+        "BKZ max_tour_rows is only supported by primal BKZ variants");
+  }
 
   if (flags & BKZ_DUMP_GSO)
   {
@@ -789,6 +794,8 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
     return set_status(RED_SUCCESS);
   if (param.tour_step < 1)
     throw std::runtime_error("BKZ tour_step must be positive");
+  if (param.max_tour_rows < 0 || param.max_tour_rows == 1)
+    throw std::runtime_error("BKZ max_tour_rows must be zero or at least two");
 
   int i = 0;
 
@@ -842,6 +849,10 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
 
   int kappa_max = -1;
   bool clean    = true;
+  const int tour_max_row =
+      param.max_tour_rows ? min(param.max_tour_rows, num_rows) : num_rows;
+  if (param.max_tour_rows && param.max_tour_rows < param.block_size)
+    throw std::runtime_error("BKZ max_tour_rows must be at least the block size");
   for (i = 0;; ++i)
   {
     if ((flags & BKZ_MAX_LOOPS) && i >= param.max_loops)
@@ -872,7 +883,7 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
       }
       else
       {
-        clean = tour(i, kappa_max, param, 0, num_rows);
+        clean = tour(i, kappa_max, param, 0, tour_max_row);
       }
     }
     catch (RedStatus &e)
@@ -881,7 +892,7 @@ template <class ZT, class FT> bool BKZReduction<ZT, FT>::bkz()
     }
 
     // if we do hkz reduction, we only need one tour
-    if (clean || param.block_size >= num_rows)
+    if (clean || param.block_size >= tour_max_row)
       break;
   }
 

@@ -122,12 +122,13 @@ public:
            double gh_factor               = BKZ_DEF_GH_FACTOR,
            double min_success_probability = BKZ_DEF_MIN_SUCCESS_PROBABILITY,
            int rerandomization_density    = BKZ_DEF_RERANDOMIZATION_DENSITY,
-           int tour_step                  = 1)
+           int tour_step                  = 1, int max_tour_rows = 0)
       : block_size(block_size), strategies(strategies), delta(delta), flags(flags),
         max_loops(max_loops), max_time(max_time), auto_abort_scale(auto_abort_scale),
         auto_abort_max_no_dec(auto_abort_max_no_dec), gh_factor(gh_factor),
         dump_gso_filename("gso.json"), min_success_probability(min_success_probability),
-        rerandomization_density(rerandomization_density), tour_step(tour_step)
+        rerandomization_density(rerandomization_density), tour_step(tour_step),
+        max_tour_rows(max_tour_rows)
   {
 
     // we create dummy strategies
@@ -192,6 +193,16 @@ public:
      local-basis-processing/jumping schedules used by progressive BKZ.
   */
   int tour_step;
+
+  /**
+     Limit each primal BKZ tour to this prefix of the basis.  Zero (the
+     default) uses every row.  This supports truncated final tours, where the
+     remaining tail is deliberately left alone.
+
+     This option is only supported by primal BKZ variants; it is incompatible
+     with SD-BKZ, slide reduction, and PotBKZ.
+  */
+  int max_tour_rows;
 };
 
 /**
