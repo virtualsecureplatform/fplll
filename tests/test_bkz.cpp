@@ -365,6 +365,23 @@ int test_progressive_bkz()
   return status == RED_SUCCESS ? 0 : 1;
 }
 
+int test_progressive_bkz_simulator()
+{
+  const vector<long double> beta20 = pbkz_simulate_gso(80, 20);
+  const vector<long double> beta40 = pbkz_simulate_gso(80, 40);
+  if (beta20.size() != 80 || beta40.size() != 80)
+    return 1;
+  const long double fec20 = pbkz_log_fec(beta20);
+  const long double fec40 = pbkz_log_fec(beta40);
+  if (!isfinite(fec20) || !isfinite(fec40) || !(fec40 < fec20))
+    return 1;
+
+  vector<long double> scaled(beta20);
+  for (long double &entry : scaled)
+    entry += 100.0L;
+  return fabsl(pbkz_log_fec(scaled) - fec20) < 1e-12L ? 0 : 1;
+}
+
 int test_scoped_row_transform()
 {
   ZZ_mat<mpz_t> basis(4, 4), original, u, u_inv_t;
@@ -528,6 +545,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_jump();
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
+  status |= test_progressive_bkz_simulator();
   status |= test_scoped_row_transform();
   status |= test_bounded_preprocessing_transform();
   status |= test_local_block_transform();

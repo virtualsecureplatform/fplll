@@ -23,6 +23,7 @@
 #endif
 
 #include "bkz.h"
+#include "pbkz_simulator.h"
 #include "bkz_param.h"
 #include "gso_gram.h"
 #include "hlll.h"
