@@ -195,6 +195,26 @@ void MatGSOInterface<ZT, FT>::apply_transform(const Matrix<FT> &transform, int s
 }
 
 template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::apply_integer_transform(const Matrix<ZT> &transform, int src_base,
+                                                      int target_base)
+{
+  const int target_size = transform.get_rows(), src_size = transform.get_cols();
+  FPLLL_CHECK(src_base >= 0 && target_base >= 0 && src_base + src_size <= d &&
+                  target_base + target_size <= d,
+              "integer transform is outside the basis");
+  const int old_d = d;
+  create_rows(target_size);
+  for (int i = 0; i < target_size; ++i)
+    for (int j = 0; j < src_size; ++j)
+      if (!transform(i, j).is_zero())
+        row_addmul_2exp(old_d + i, src_base + j, transform(i, j), 0);
+
+  for (int i = 0; i < target_size; ++i)
+    row_swap(target_base + i, old_d + i);
+  remove_last_rows(target_size);
+}
+
+template <class ZT, class FT>
 double MatGSOInterface<ZT, FT>::get_current_slope(int start_row, int stop_row)
 {
   FT f, log_f;

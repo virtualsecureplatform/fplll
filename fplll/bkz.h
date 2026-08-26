@@ -154,6 +154,13 @@ public:
     }
   }
 
+  template <class FT> void apply_exact(MatGSOInterface<Z_NR<mpz_t>, FT> &gso, int offset) const
+  {
+    FPLLL_CHECK(offset >= 0 && offset + dimension() <= gso.get_rows_of_b(),
+                "local block is outside the basis");
+    gso.apply_integer_transform(transform, offset);
+  }
+
 private:
   void check_index(int index) const
   {

@@ -377,9 +377,17 @@ public:
    */
   void apply_transform(const Matrix<FT> &transform, int src_base, int target_base);
 
+  /** Apply an exact integer row transformation without FP conversion. */
+  void apply_integer_transform(const Matrix<ZT> &transform, int src_base, int target_base);
+
   void apply_transform(const Matrix<FT> &transform, int src_base)
   {
     apply_transform(transform, src_base, src_base);
+  }
+
+  void apply_integer_transform(const Matrix<ZT> &transform, int src_base)
+  {
+    apply_integer_transform(transform, src_base, src_base);
   }
 
   /**
@@ -528,9 +536,8 @@ protected:
   virtual void row_addmul_si(int i, int j, long x) = 0;
   // b[i] <- b[i] + (2^expo * x) * b[j] (i > j)
 
-  // TODO check if these must be scratched here!
-  // virtual void row_addmul_si_2exp(int i, int j, long x, long expo) = 0;
-  // virtual void row_addmul_2exp(int i, int j, const ZT &x, long expo) = 0;
+  virtual void row_addmul_si_2exp(int i, int j, long x, long expo) = 0;
+  virtual void row_addmul_2exp(int i, int j, const ZT &x, long expo) = 0;
 
 public:
   // made public for lll.cpp and bkz.cpp

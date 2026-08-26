@@ -384,7 +384,7 @@ int test_local_block_transform()
 
   MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(A, U, UT, GSO_DEFAULT);
   gso.discover_all_rows();
-  transform.apply(gso, 1);
+  transform.apply_exact(gso, 1);
   if (transform.matrix().get_rows() != 2)
     return 1;
   for (int i = 0; i < A.get_rows(); ++i)
