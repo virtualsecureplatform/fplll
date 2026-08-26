@@ -258,10 +258,15 @@ public:
    * @param param
    *    parameter object for the current block size (the parameter object for the recursive
    *    calls will be created in this function using the information from this object)
-   *@returns
+   * @param transform
+   *    optional exact transform produced by preprocessing. When provided,
+   *    BKZ_BOUNDED_LLL must be enabled and all recursive preprocessing is
+   *    confined to the block.
+   * @returns
    *    false if it modified the basis, true otherwise
    */
-  bool svp_preprocessing(int kappa, unsigned int block_size, const BKZParam &param);
+  bool svp_preprocessing(int kappa, unsigned int block_size, const BKZParam &param,
+                         RowTransform<ZT> *transform = nullptr);
 
   /**
    * @brief Inserts given (dual) vector into the basis
@@ -470,7 +475,7 @@ private:
   // the window size (simply returns when the first block is reduced)
   bool trunc_dtour(const BKZParam &param, int min_row, int max_row);
   // Apply full DeepLLL to the prefix [0, kappa_end), as in DeepBKZ.
-  bool deep_lll(int kappa_end);
+  bool deep_lll(int kappa_end, int kappa_start = 0);
   // Apply PotLLL to a prefix of the basis.
   bool pot_lll(int kappa_min = 0, int kappa_start = 0, int kappa_end = -1,
                int size_reduction_start = 0);

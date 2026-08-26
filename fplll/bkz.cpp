@@ -101,49 +101,70 @@ const PruningParams &BKZReduction<ZT, FT>::get_pruning(int kappa, unsigned int b
 
 template <class ZT, class FT>
 bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
-                                             const BKZParam &param)
+                                             const BKZParam &param,
+                                             RowTransform<ZT> *transform)
 {
   bool clean = true;
 
   FPLLL_DEBUG_CHECK(param.strategies.size() > block_size);
+  if (transform != nullptr)
+  {
+    FPLLL_CHECK(param.flags & BKZ_BOUNDED_LLL,
+                "local transform capture requires bounded LLL preprocessing");
+    m.begin_row_transform(kappa, kappa + block_size, *transform);
+  }
 
-  if (param.flags & BKZ_DEEP_LLL)
+  try
   {
-    /* Algorithm 3 of Yamaguchi--Yasuda applies DeepLLL to the prefix
-       ending one row after the enumerated block. */
-    clean &= deep_lll(min(kappa + static_cast<int>(block_size) + 1, num_rows));
-  }
-  else if (param.flags & BKZ_POT_LLL_BKZ)
-  {
-    const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
-    if (!lll_obj.potlll(lll_start, lll_start, kappa + block_size, lll_start))
-      throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
-    if (lll_obj.n_swaps > 0)
-      clean = false;
-  }
-  else
-  {
-    int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
-    if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, 0))
+    if (param.flags & BKZ_DEEP_LLL)
     {
-      throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+      /* Algorithm 3 of Yamaguchi--Yasuda applies DeepLLL to the prefix
+         ending one row after the enumerated block. Bounded preprocessing
+         deliberately excludes that extra row so the operation remains local. */
+      const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
+      const int lll_extra = (param.flags & BKZ_BOUNDED_LLL) ? 0 : 1;
+      clean &=
+          deep_lll(min(kappa + static_cast<int>(block_size) + lll_extra, num_rows), lll_start);
     }
-    if (lll_obj.n_swaps > 0)
-      clean = false;
-  }
+    else if (param.flags & BKZ_POT_LLL_BKZ)
+    {
+      const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
+      if (!lll_obj.potlll(lll_start, lll_start, kappa + block_size, lll_start))
+        throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+      if (lll_obj.n_swaps > 0)
+        clean = false;
+    }
+    else
+    {
+      const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
+      if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, lll_start))
+        throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
+      if (lll_obj.n_swaps > 0)
+        clean = false;
+    }
 
-  // run one tour of recursive preprocessing
-  auto &preproc = param.strategies[block_size].preprocessing_block_sizes;
-  for (auto it = preproc.begin(); it != preproc.end(); ++it)
+    // run one tour of recursive preprocessing
+    auto &preproc = param.strategies[block_size].preprocessing_block_sizes;
+    for (auto it = preproc.begin(); it != preproc.end(); ++it)
+    {
+      int dummy_kappa_max    = num_rows;
+      const int prepar_flags =
+          BKZ_GH_BND |
+          (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ | BKZ_BOUNDED_LLL));
+      BKZParam prepar = BKZParam(*it, param.strategies, LLL_DEF_DELTA, prepar_flags);
+      clean &= tour(0, dummy_kappa_max, prepar, kappa, kappa + block_size);
+    }
+
+    if (transform != nullptr)
+      m.end_row_transform(*transform);
+    return clean;
+  }
+  catch (...)
   {
-    int dummy_kappa_max = num_rows;
-    const int prepar_flags =
-        BKZ_GH_BND | (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ));
-    BKZParam prepar         = BKZParam(*it, param.strategies, LLL_DEF_DELTA, prepar_flags);
-    clean &= tour(0, dummy_kappa_max, prepar, kappa, kappa + block_size);
+    if (transform != nullptr)
+      m.end_row_transform(*transform);
+    throw;
   }
-
-  return clean;
 }
 
 template <class ZT, class FT>
@@ -403,10 +424,11 @@ bool BKZReduction<ZT, FT>::svp_reduction(int kappa, int block_size, const BKZPar
   return (dual) ? (old_first >= new_first) : (old_first <= new_first);
 }
 
-template <class ZT, class FT> bool BKZReduction<ZT, FT>::deep_lll(int kappa_end)
+template <class ZT, class FT> bool BKZReduction<ZT, FT>::deep_lll(int kappa_end, int kappa_start)
 {
   kappa_end = min(kappa_end, num_rows);
-  if (!lll_obj.deeplll(kappa_end, 0, 0, kappa_end, 0))
+  FPLLL_CHECK(0 <= kappa_start && kappa_start <= kappa_end, "invalid DeepLLL interval");
+  if (!lll_obj.deeplll(kappa_end - kappa_start, kappa_start, kappa_start, kappa_end, kappa_start))
     throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
   return lll_obj.n_swaps == 0;
 }

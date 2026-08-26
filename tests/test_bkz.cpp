@@ -403,6 +403,54 @@ int test_scoped_row_transform()
   return gso.update_gso() ? 0 : 1;
 }
 
+int test_bounded_preprocessing_transform()
+{
+  ZZ_mat<mpz_t> basis(4, 4), original, u, u_inv_t;
+  basis.gen_zero(4, 4);
+  basis(0, 0) = 1;
+  basis(1, 0) = 5;
+  basis(1, 1) = 4;
+  basis(2, 0) = 2;
+  basis(2, 1) = 1;
+  basis(2, 2) = 1;
+  basis(3, 0) = 3;
+  basis(3, 3) = 1;
+  original = basis;
+  u.gen_identity(4);
+
+  MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(basis, u, u_inv_t, GSO_DEFAULT);
+  gso.discover_all_rows();
+  if (!gso.update_gso())
+    return 1;
+  LLLReduction<Z_NR<mpz_t>, FP_NR<double>> lll(gso, LLL_DEF_DELTA, LLL_DEF_ETA,
+                                               LLL_DEFAULT);
+  vector<Strategy> strategies;
+  BKZParam param(3, strategies);
+  param.flags = BKZ_BOUNDED_LLL;
+  BKZReduction<Z_NR<mpz_t>, FP_NR<double>> bkz(gso, lll, param);
+  RowTransform<Z_NR<mpz_t>> transform;
+  bkz.svp_preprocessing(1, 3, param, &transform);
+
+  for (int row = 0; row < 3; ++row)
+    for (int column = 0; column < 4; ++column)
+    {
+      Z_NR<mpz_t> expected;
+      expected = 0;
+      for (int source = 0; source < 3; ++source)
+        expected.addmul(transform.matrix()(row, source), original(1 + source, column));
+      if (basis(1 + row, column) != expected)
+        return 1;
+      const Z_NR<mpz_t> expected_u = column == 0 ? Z_NR<mpz_t>()
+                                                  : transform.matrix()(row, column - 1);
+      if (u(1 + row, column) != expected_u)
+        return 1;
+    }
+  for (int column = 0; column < 4; ++column)
+    if (basis(0, column) != original(0, column))
+      return 1;
+  return gso.update_gso() ? 0 : 1;
+}
+
 int test_local_block_transform()
 {
   ZZ_mat<mpz_t> A(4, 4), U, UT;
@@ -508,6 +556,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
   status |= test_scoped_row_transform();
+  status |= test_bounded_preprocessing_transform();
   status |= test_local_block_transform();
   status |= test_local_block_lll();
   status |= test_local_block_process();
