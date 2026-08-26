@@ -83,6 +83,7 @@ template <class ZT, class FT> void MatGSO<ZT, FT>::discover_row()
 
 template <class ZT, class FT> void MatGSO<ZT, FT>::row_add(int i, int j)
 {
+  this->validate_recorded_rows(i, j);
   b[i].add(b[j], n_known_cols);
   if (enable_transform)
   {
@@ -102,10 +103,12 @@ template <class ZT, class FT> void MatGSO<ZT, FT>::row_add(int i, int j)
       if (k != i)
         sym_g(i, k).add(sym_g(i, k), sym_g(j, k));
   }
+  this->record_row_addmul_si(i, j, 1);
 }
 
 template <class ZT, class FT> void MatGSO<ZT, FT>::row_sub(int i, int j)
 {
+  this->validate_recorded_rows(i, j);
   b[i].sub(b[j], n_known_cols);
   if (enable_transform)
   {
@@ -125,10 +128,12 @@ template <class ZT, class FT> void MatGSO<ZT, FT>::row_sub(int i, int j)
       if (k != i)
         sym_g(i, k).sub(sym_g(i, k), sym_g(j, k));
   }
+  this->record_row_addmul_si(i, j, -1);
 }
 
 template <class ZT, class FT> void MatGSO<ZT, FT>::row_addmul_si(int i, int j, long x)
 {
+  this->validate_recorded_rows(i, j);
   b[i].addmul_si(b[j], x, n_known_cols);
   if (enable_transform)
   {
@@ -157,11 +162,13 @@ template <class ZT, class FT> void MatGSO<ZT, FT>::row_addmul_si(int i, int j, l
       sym_g(i, k).add(sym_g(i, k), ztmp1);
     }
   }
+  this->record_row_addmul_si(i, j, x);
 }
 
 template <class ZT, class FT>
 void MatGSO<ZT, FT>::row_addmul_si_2exp(int i, int j, long x, long expo)
 {
+  this->validate_recorded_rows(i, j);
   b[i].addmul_si_2exp(b[j], x, expo, n_known_cols, ztmp1);
   if (enable_transform)
   {
@@ -192,11 +199,13 @@ void MatGSO<ZT, FT>::row_addmul_si_2exp(int i, int j, long x, long expo)
       sym_g(i, k).add(sym_g(i, k), ztmp1);
     }
   }
+  this->record_row_addmul_si(i, j, x, expo);
 }
 
 template <class ZT, class FT>
 void MatGSO<ZT, FT>::row_addmul_2exp(int i, int j, const ZT &x, long expo)
 {
+  this->validate_recorded_rows(i, j);
   b[i].addmul_2exp(b[j], x, expo, n_known_cols, ztmp1);
   if (enable_transform)
   {
@@ -231,6 +240,7 @@ void MatGSO<ZT, FT>::row_addmul_2exp(int i, int j, const ZT &x, long expo)
       sym_g(i, k).add(sym_g(i, k), ztmp1);
     }
   }
+  this->record_row_addmul_2exp(i, j, x, expo);
 }
 
 template <class ZT, class FT>
@@ -263,6 +273,7 @@ void MatGSO<ZT, FT>::row_addmul_we(int i, int j, const FT &x, long expo_add)
 // In row_swap, i < j
 template <class ZT, class FT> void MatGSO<ZT, FT>::row_swap(int i, int j)
 {
+  this->validate_recorded_rows(i, j);
   FPLLL_DEBUG_CHECK(!enable_inverse_transform);
   b.swap_rows(i, j);
   if (enable_transform)
@@ -284,10 +295,12 @@ template <class ZT, class FT> void MatGSO<ZT, FT>::row_swap(int i, int j)
       g(k, i).swap(g(k, j));
     g(i, i).swap(g(j, j));
   }
+  this->record_row_swap(i, j);
 }
 
 template <class ZT, class FT> void MatGSO<ZT, FT>::move_row(int old_r, int new_r)
 {
+  this->validate_recorded_rows(old_r, new_r);
   FPLLL_DEBUG_CHECK(!cols_locked);
   if (new_r < old_r)
   {
@@ -363,6 +376,7 @@ template <class ZT, class FT> void MatGSO<ZT, FT>::move_row(int old_r, int new_r
       }
     }
   }
+  this->record_move_row(old_r, new_r);
 }
 
 template <class ZT, class FT> void MatGSO<ZT, FT>::size_increased()

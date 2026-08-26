@@ -290,6 +290,7 @@ template <class ZT, class FT> inline int MatGSO<ZT, FT>::get_rows_of_b() const
 
 template <class ZT, class FT> inline void MatGSO<ZT, FT>::negate_row_of_b(int i)
 {
+  this->validate_recorded_rows(i);
 
   for (int j = 0; j < get_cols_of_b(); j++)
   {
@@ -309,6 +310,15 @@ template <class ZT, class FT> inline void MatGSO<ZT, FT>::negate_row_of_b(int i)
       }
     }
   }
+  if (enable_transform)
+  {
+    for (int j = 0; j < u.get_cols(); ++j)
+      u(i, j).neg(u(i, j));
+    if (enable_inverse_transform)
+      for (int j = 0; j < u_inv_t.get_cols(); ++j)
+        u_inv_t(i, j).neg(u_inv_t(i, j));
+  }
+  this->record_negate_row(i);
 }
 
 template <class ZT, class FT> inline FT &MatGSO<ZT, FT>::get_gram(FT &f, int i, int j)

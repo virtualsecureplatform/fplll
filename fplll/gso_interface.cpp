@@ -215,6 +215,115 @@ void MatGSOInterface<ZT, FT>::apply_integer_transform(const Matrix<ZT> &transfor
 }
 
 template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::begin_row_transform(int first, int last,
+                                                  RowTransform<ZT> &transform)
+{
+  FPLLL_CHECK(0 <= first && first <= last && last <= d,
+              "row transform interval is outside the basis");
+  for (const RowTransformScope &scope : row_transform_scopes)
+    FPLLL_CHECK(scope.transform != &transform, "row transform is already being recorded");
+  transform.reset(last - first);
+  row_transform_scopes.push_back({first, last, &transform});
+}
+
+template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::end_row_transform(RowTransform<ZT> &transform)
+{
+  FPLLL_CHECK(!row_transform_scopes.empty() &&
+                  row_transform_scopes.back().transform == &transform,
+              "row transforms must end in reverse registration order");
+  row_transform_scopes.pop_back();
+}
+
+template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::validate_recorded_rows(int first, int second) const
+{
+  for (const RowTransformScope &scope : row_transform_scopes)
+  {
+    FPLLL_CHECK(scope.first <= first && first < scope.last,
+                "row operation escaped the recorded interval");
+    if (second >= 0)
+      FPLLL_CHECK(scope.first <= second && second < scope.last,
+                  "row operation escaped the recorded interval");
+  }
+}
+
+template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::record_row_swap(int first, int second)
+{
+  for (RowTransformScope &scope : row_transform_scopes)
+  {
+    FPLLL_CHECK(scope.first <= first && first < scope.last && scope.first <= second &&
+                    second < scope.last,
+                "row swap escaped the recorded interval");
+    scope.transform->transform.swap_rows(first - scope.first, second - scope.first);
+    ++scope.transform->operation_count;
+  }
+}
+
+template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::record_move_row(int old_row, int new_row)
+{
+  for (RowTransformScope &scope : row_transform_scopes)
+  {
+    FPLLL_CHECK(scope.first <= old_row && old_row < scope.last && scope.first <= new_row &&
+                    new_row < scope.last,
+                "row move escaped the recorded interval");
+    const int old_local = old_row - scope.first;
+    const int new_local = new_row - scope.first;
+    if (new_local < old_local)
+      scope.transform->transform.rotate_right(new_local, old_local);
+    else if (old_local < new_local)
+      scope.transform->transform.rotate_left(old_local, new_local);
+    ++scope.transform->operation_count;
+  }
+}
+
+template <class ZT, class FT> void MatGSOInterface<ZT, FT>::record_negate_row(int row)
+{
+  for (RowTransformScope &scope : row_transform_scopes)
+  {
+    FPLLL_CHECK(scope.first <= row && row < scope.last,
+                "row negation escaped the recorded interval");
+    for (int column = 0; column < scope.transform->dimension(); ++column)
+    {
+      ZT &entry = scope.transform->transform(row - scope.first, column);
+      entry.neg(entry);
+    }
+    ++scope.transform->operation_count;
+  }
+}
+
+template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::record_row_addmul_si(int destination, int source, long coefficient,
+                                                   long exponent)
+{
+  ZT exact_coefficient;
+  exact_coefficient = coefficient;
+  exact_coefficient.mul_2si(exact_coefficient, exponent);
+  record_row_addmul_2exp(destination, source, exact_coefficient, 0);
+}
+
+template <class ZT, class FT>
+void MatGSOInterface<ZT, FT>::record_row_addmul_2exp(int destination, int source,
+                                                     const ZT &coefficient, long exponent)
+{
+  if (coefficient.is_zero())
+    return;
+  ZT exact_coefficient;
+  exact_coefficient.mul_2si(coefficient, exponent);
+  for (RowTransformScope &scope : row_transform_scopes)
+  {
+    FPLLL_CHECK(scope.first <= destination && destination < scope.last && scope.first <= source &&
+                    source < scope.last,
+                "row addition escaped the recorded interval");
+    scope.transform->transform[destination - scope.first].addmul(
+        scope.transform->transform[source - scope.first], exact_coefficient);
+    ++scope.transform->operation_count;
+  }
+}
+
+template <class ZT, class FT>
 double MatGSOInterface<ZT, FT>::get_current_slope(int start_row, int stop_row)
 {
   FT f, log_f;

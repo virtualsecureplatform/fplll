@@ -363,6 +363,46 @@ int test_progressive_bkz()
   return (status == RED_SUCCESS || status == RED_BKZ_LOOPS_LIMIT) ? 0 : 1;
 }
 
+int test_scoped_row_transform()
+{
+  ZZ_mat<mpz_t> basis(4, 4), original, u, u_inv_t;
+  basis.gen_identity(4);
+  basis(1, 0) = 3;
+  basis(2, 1) = 5;
+  basis(3, 2) = 7;
+  original = basis;
+  u.gen_identity(4);
+
+  MatGSO<Z_NR<mpz_t>, FP_NR<double>> gso(basis, u, u_inv_t, GSO_DEFAULT);
+  gso.discover_all_rows();
+  RowTransform<Z_NR<mpz_t>> transform;
+  {
+    ScopedRowTransformRecorder<Z_NR<mpz_t>, FP_NR<double>> recorder(gso, 1, 4, transform);
+    FP_NR<double> coefficient;
+    coefficient = 6;
+    gso.row_op_begin(1, 4);
+    gso.row_addmul(3, 1, coefficient);
+    gso.row_op_end(1, 4);
+    gso.negate_row_of_b(2);
+    gso.move_row(3, 1);
+  }
+
+  if (transform.empty() || transform.dimension() != 3)
+    return 1;
+  for (int row = 0; row < 3; ++row)
+    for (int column = 0; column < basis.get_cols(); ++column)
+    {
+      Z_NR<mpz_t> expected;
+      expected = 0;
+      for (int source = 0; source < 3; ++source)
+        expected.addmul(transform.matrix()(row, source), original(1 + source, column));
+      if (basis(1 + row, column) != expected)
+        return 1;
+    }
+
+  return gso.update_gso() ? 0 : 1;
+}
+
 int test_local_block_transform()
 {
   ZZ_mat<mpz_t> A(4, 4), U, UT;
@@ -467,6 +507,7 @@ int main(int /*argc*/, char ** /*argv*/)
   status |= test_bkz_jump();
   status |= test_bkz_truncated_tours();
   status |= test_progressive_bkz();
+  status |= test_scoped_row_transform();
   status |= test_local_block_transform();
   status |= test_local_block_lll();
   status |= test_local_block_process();

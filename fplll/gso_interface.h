@@ -49,6 +49,42 @@ template <class FT>
 void adjust_radius_to_gh_bound(FT &max_dist, long max_dist_expo, int block_size, const FT &root_det,
                                double gh_factor);
 
+/** Exact unimodular row transformation accumulated over a contiguous basis block. */
+template <class ZT> class RowTransform
+{
+public:
+  explicit RowTransform(int dimension = 0) : transform(dimension, dimension), operation_count(0)
+  {
+    FPLLL_CHECK(dimension >= 0, "row transform dimension must be non-negative");
+    set_identity();
+  }
+
+  void reset(int dimension)
+  {
+    FPLLL_CHECK(dimension >= 0, "row transform dimension must be non-negative");
+    transform.resize(dimension, dimension);
+    set_identity();
+    operation_count = 0;
+  }
+
+  int dimension() const { return transform.get_rows(); }
+  bool empty() const { return operation_count == 0; }
+  const Matrix<ZT> &matrix() const { return transform; }
+
+private:
+  template <class, class> friend class MatGSOInterface;
+
+  void set_identity()
+  {
+    transform.fill(0);
+    for (int index = 0; index < transform.get_rows(); ++index)
+      transform(index, index) = 1;
+  }
+
+  Matrix<ZT> transform;
+  size_t operation_count;
+};
+
 /**
  * MatGSOInterface provides an interface for performing elementary operations on a basis
  * and computing its Gram matrix and its Gram-Schmidt orthogonalization.
@@ -380,6 +416,10 @@ public:
   /** Apply an exact integer row transformation without FP conversion. */
   void apply_integer_transform(const Matrix<ZT> &transform, int src_base, int target_base);
 
+  /** Begin/end exact recording of all row operations in [first, last). */
+  void begin_row_transform(int first, int last, RowTransform<ZT> &transform);
+  void end_row_transform(RowTransform<ZT> &transform);
+
   void apply_transform(const Matrix<FT> &transform, int src_base)
   {
     apply_transform(transform, src_base, src_base);
@@ -510,6 +550,13 @@ public:
   const bool row_op_force_long;
 
 protected:
+  void validate_recorded_rows(int first, int second = -1) const;
+  void record_row_swap(int first, int second);
+  void record_move_row(int old_row, int new_row);
+  void record_negate_row(int row);
+  void record_row_addmul_si(int destination, int source, long coefficient, long exponent = 0);
+  void record_row_addmul_2exp(int destination, int source, const ZT &coefficient, long exponent);
+
   /** Allocates matrices and arrays whose size depends on d (all but tmp_col_expo).
    * When enable_int_gram=false, initializes bf.
    */
@@ -605,6 +652,15 @@ public:
   /* Gram matrix (dot products of basis vectors, lower triangular matrix)
    g(i, j) is valid if 0 <= i < n_known_rows and j <= i */
   Matrix<ZT> *gptr;
+
+protected:
+  struct RowTransformScope
+  {
+    int first;
+    int last;
+    RowTransform<ZT> *transform;
+  };
+  vector<RowTransformScope> row_transform_scopes;
   //  Matrix<ZT> g;
 
 protected:
@@ -629,6 +685,27 @@ protected:
   int row_op_first, row_op_last;
   bool in_row_op_range(int i) { return i >= row_op_first && i < row_op_last; }
 #endif
+};
+
+/** Exception-safe registration of an exact row-transform recording interval. */
+template <class ZT, class FT> class ScopedRowTransformRecorder
+{
+public:
+  ScopedRowTransformRecorder(MatGSOInterface<ZT, FT> &gso, int first, int last,
+                             RowTransform<ZT> &transform)
+      : gso(gso), transform(transform)
+  {
+    gso.begin_row_transform(first, last, transform);
+  }
+
+  ~ScopedRowTransformRecorder() { gso.end_row_transform(transform); }
+
+private:
+  ScopedRowTransformRecorder(const ScopedRowTransformRecorder &);
+  ScopedRowTransformRecorder &operator=(const ScopedRowTransformRecorder &);
+
+  MatGSOInterface<ZT, FT> &gso;
+  RowTransform<ZT> &transform;
 };
 
 template <class ZT, class FT> inline MatGSOInterface<ZT, FT>::~MatGSOInterface()
