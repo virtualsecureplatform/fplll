@@ -58,6 +58,7 @@ struct Options
     bkz_max_loops = 0;
     bkz_max_time  = 0;
     bkz_max_tour_rows = 0;
+    bkz_tour_step = 1;
   }
   Action action;
   LLLMethod method;
@@ -79,6 +80,7 @@ struct Options
   double prune_min_prob;
   double bkz_max_time;
   int bkz_max_tour_rows;
+  int bkz_tour_step;
   string bkz_dump_gso_filename;
   double bkz_gh_factor;
   string bkz_strategy_file;
