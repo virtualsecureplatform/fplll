@@ -1225,6 +1225,18 @@ int bkz_reduction(ZZ_mat<mpz_t> &b, int block_size, int flags, FloatType float_t
   return bkz_reduction(&b, NULL, param, float_type, precision);
 }
 
+int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
+                              FloatType float_type, int precision)
+{
+  for (const BKZParam &stage : stages)
+  {
+    const int status = bkz_reduction(B, NULL, stage, float_type, precision);
+    if (status != RED_SUCCESS)
+      return status;
+  }
+  return RED_SUCCESS;
+}
+
 int bkz_reduction(ZZ_mat<mpz_t> &b, ZZ_mat<mpz_t> &u, int block_size, int flags,
                   FloatType float_type, int precision)
 {

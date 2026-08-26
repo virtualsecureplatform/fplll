@@ -371,6 +371,21 @@ int bkz_reduction(ZZ_mat<mpz_t> *B, ZZ_mat<mpz_t> *U, const BKZParam &param,
                   FloatType float_type = FT_DEFAULT, int precision = 0);
 
 /**
+ * @brief Apply a progressive sequence of BKZ parameter sets to a basis.
+ *
+ * Each stage starts from the reduced basis produced by the preceding stage.
+ * This is the execution primitive needed by progressive BKZ schedulers; the
+ * caller supplies the schedule, including its block sizes, pruning strategy,
+ * and optional jump or truncated-tour settings.
+ *
+ * The stages are executed in order and processing stops at the first
+ * non-success status.  A transformation matrix is intentionally not accepted:
+ * callers needing one can compose the per-stage transformations explicitly.
+ */
+int progressive_bkz_reduction(ZZ_mat<mpz_t> *B, const vector<BKZParam> &stages,
+                              FloatType float_type = FT_DEFAULT, int precision = 0);
+
+/**
  * @brief Performs block reduction without transformation matrix.
  *
  * Creates a parameter object corresponding to the parameters and calls bkz_reduction
