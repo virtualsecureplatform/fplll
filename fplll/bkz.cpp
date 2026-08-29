@@ -130,7 +130,12 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
     else if (param.flags & BKZ_POT_LLL_BKZ)
     {
       const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
-      if (!lll_obj.potlll(lll_start, lll_start, kappa + block_size, lll_start))
+      /* Keep the LLL insertion interval local, but size-reduce against the
+         complete prefix.  Restricting size reduction to kappa was removed
+         upstream as unsafe: the projected block then no longer satisfies the
+         assumptions made by BKZ enumeration and postprocessing. */
+      const int size_reduction_start = transform != nullptr ? lll_start : 0;
+      if (!lll_obj.potlll(lll_start, lll_start, kappa + block_size, size_reduction_start))
         throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
       if (lll_obj.n_swaps > 0)
         clean = false;
@@ -138,7 +143,8 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
     else
     {
       const int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
-      if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, lll_start))
+      const int size_reduction_start = transform != nullptr ? lll_start : 0;
+      if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, size_reduction_start))
         throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
       if (lll_obj.n_swaps > 0)
         clean = false;
@@ -149,9 +155,12 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, unsigned int block_size,
     for (auto it = preproc.begin(); it != preproc.end(); ++it)
     {
       int dummy_kappa_max    = num_rows;
-      const int prepar_flags =
-          BKZ_GH_BND |
-          (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ | BKZ_BOUNDED_LLL));
+      /* Recursive preprocessing needs the full prefix.  Propagating
+         BKZ_BOUNDED_LLL here is the other half of the unsafe historical
+         optimization and can invalidate the parent block's projection. */
+      int prepar_flags = BKZ_GH_BND | (param.flags & (BKZ_DEEP_LLL | BKZ_POT_LLL_BKZ));
+      if (transform != nullptr)
+        prepar_flags |= param.flags & BKZ_BOUNDED_LLL;
       BKZParam prepar = BKZParam(*it, param.strategies, LLL_DEF_DELTA, prepar_flags);
       clean &= tour(0, dummy_kappa_max, prepar, kappa, kappa + block_size);
     }

@@ -16,6 +16,10 @@
 
 #include "enumerate_ext.h"
 #include "../defs.h"
+#include <cmath>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
 
 #if FPLLL_MAX_PARALLEL_ENUM_DIM != 0
 #include "../enum-parallel/enumlib.h"
@@ -150,6 +154,32 @@ void ExternalEnumeration<ZT, FT>::callback_set_config(enumf *mu, size_t mudim, b
 template <typename ZT, typename FT>
 enumf ExternalEnumeration<ZT, FT>::callback_process_sol(enumf dist, enumf *sol)
 {
+  unsigned long long coefficient_gcd = 0;
+  for (int i = 0; i < _d; ++i)
+  {
+    if (!std::isfinite(sol[i]) || sol[i] != std::nearbyint(sol[i]) ||
+        std::fabs(sol[i]) > static_cast<enumf>(std::numeric_limits<long long>::max()))
+      throw std::runtime_error("external enumerator returned a non-integral coefficient");
+    const long long coefficient = static_cast<long long>(sol[i]);
+    const unsigned long long magnitude = coefficient < 0
+        ? static_cast<unsigned long long>(-(coefficient + 1)) + 1
+        : static_cast<unsigned long long>(coefficient);
+    unsigned long long a = coefficient_gcd, b = magnitude;
+    while (b != 0)
+    {
+      const unsigned long long remainder = a % b;
+      a = b;
+      b = remainder;
+    }
+    coefficient_gcd = a;
+  }
+  if (coefficient_gcd != 1)
+  {
+    std::ostringstream message;
+    message << "external enumerator returned a non-primitive solution: dimension=" << _d
+            << " gcd=" << coefficient_gcd << " norm=" << dist;
+    throw std::runtime_error(message.str());
+  }
   for (int i = 0; i < _d; ++i)
     _fx[i] = sol[i];
   _evaluator.eval_sol(_fx, dist, _maxdist);
